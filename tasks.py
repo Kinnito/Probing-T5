@@ -38,30 +38,25 @@ def ner():
             return self._get_iob_words(grid, tagset, column)
         return LazyConcatenation(LazyMap(get_iob_words, self._grids(fileids)))
 
+    
     def _get_iob_words(self, grid, tagset=None, columns="ne"):
-        print("pos here", self._colmap['pos'])
-        print("length of grid:", len(grid))
+        #print("pos here", self._colmap['pos'])
+        #print("length of grid:", len(grid))
         pos_tags = self._get_column(grid, self._colmap['pos'])
         if tagset and tagset != self._tagset:
             pos_tags = [map_tag(self._tagset, tagset, t) for t in pos_tags]
         return list(zip(self._get_column(grid, self._colmap['words']), pos_tags,
                    self._get_column(grid, self._colmap[columns])))
 
-  temp = nerConllReader(r'nltk_data/corpora/conll2003/', r'eng.train', ('words', 'pos', 'chunk', 'ne'))
-  print(temp)
-  print(temp.iob_words())
+ 
+  reader = nerConllReader(r'nltk_data/corpora/conll2003/', r'eng.train', ('words', 'pos', 'ne'))
+  print(reader.iob_words())
 
   '''
   print("here's the grids:", temp._grids())
-  print(temp._get_iob_words(temp._grids(), columns=['ne']))
-  print(temp._get_iob_words(temp._grids(), columns=['chunk', 'ne']))
+  print(reader._get_iob_words(temp._grids(), columns=['ne']))
+  print(reader._get_iob_words(temp._grids(), columns=['chunk', 'ne']))
   '''
-  train_sents = temp.iob_words()
-  train_data = [sent[0] for sent in train_sents]
-  train_label = [sent[2] for sent in train_sents]
-  
-  print("train data first", train_data[0])
-  print("train label first", train_label[0])
 
 if __name__ == "__main__":
   # TODO:
@@ -71,26 +66,3 @@ if __name__ == "__main__":
   tokenizer = AutoTokenizer.from_pretrained("t5-small")
   model = AutoModelWithLMHead.from_pretrained("t5-small")
   
-  train_data, train_label = chunking()
-  
-  d, l = ner()
-  print(d[0])
-  print(l[0])
-  '''
-  print("train data", train_data[0])
-  print("train label", train_label[0])
-  train_d = ' '.join(train_data[0])
-  train = "chunking: " + train_d
-  print(train)
-  train_label = ' '.join(train_label[0])
-  print(train_label)
-  inputs = tokenizer.encode(train_d, return_tensors='pt')
-  labels = tokenizer.encode(train_label, return_tensors='pt')
-  print("here's the inputs", inputs)
-  print("here's the labels", labels)
-  result = model(input_ids=inputs, lm_labels=labels)
-  print(result)
-  print("size of the results", result.size())
-  print("size of the inputs", labels.size())
-  print("chunking now")
-  '''
