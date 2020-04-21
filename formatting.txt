@@ -1,0 +1,5 @@
+Probing Task - Input - Output
+..
+Chunking - "a dog got into" - "B-NP I-NP B-VP B-PP""
+
+

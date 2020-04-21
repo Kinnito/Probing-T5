@@ -59,15 +59,13 @@ def ner():
     print(reader._get_iob_words(temp._grids(), columns=['chunk', 'ne']))
     '''
 
-def pos2():
-    '''
+def pos():
     def convert(line):
         sent = line.split()
         if not sent:
             return []
         else:
             return (sent[1], sent[4])
-    '''
 
     filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
     word_pos = []
@@ -86,11 +84,10 @@ def pos2():
                 word_pos.append(sent)
                 sent = []
             else:
-                sent.append((stripped[1], stripped[4]))
+                sent.append((stripped[1].lower(), stripped[4]))
 
-def create_batches():
-
-
+    return word_pos
+                
 if __name__ == "__main__":
     # TODO:
     ## 1. Figure out the format of the data that needs to be fed in (take a look at the tokenization)
@@ -99,5 +96,4 @@ if __name__ == "__main__":
     # tokenizer = AutoTokenizer.from_pretrained("t5-small")
     #model = AutoModelWithLMHead.from_pretrained("t5-small")
     
-    #pos()
-    pos2()
+    print(pos())
