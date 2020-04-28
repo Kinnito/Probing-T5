@@ -1,6 +1,8 @@
 from __future__ import print_function
 import nltk
 import ipywidgets as widgets
+import numpy as np
+import torch
 from transformers import AutoTokenizer, AutoModelWithLMHead
 from nltk.corpus import conll2000
 from nltk.corpus import treebank
@@ -13,6 +15,8 @@ from tokenizers import (ByteLevelBPETokenizer,
 
 # appending a path every time because it won't stick
 nltk.data.path.append('/data/limill01/Probing-T5/nltk_data/')
+
+device = torch.device('cuda:0')
 
 # get the dataset into the correct form and append "chunking:" to the front
 def chunking():
@@ -59,6 +63,7 @@ def ner():
     print(reader._get_iob_words(temp._grids(), columns=['chunk', 'ne']))
     '''
 
+    '''
 def pos():
     def convert(line):
         sent = line.split()
@@ -70,11 +75,6 @@ def pos():
     filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
     word_pos = []
     with open(filename) as f:
-
-        # list comp that doesn't work ish
-        # word_pos = [[result for result in convert(line) if result]
-        #        for line in f if not line.startswith('#')] 
-
         sent = []
         for line in f:
             stripped = line.split()
@@ -87,13 +87,99 @@ def pos():
                 sent.append((stripped[1].lower(), stripped[4]))
 
     return word_pos
-                
+    '''
+
+def pos():
+    filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
+    sents = []
+    pos_tokens = []
+
+    with open(filename) as f:
+        sent = []
+        token = []
+        for line in f:
+            stripped = line.split()
+            if line.startswith('#'):
+                continue
+            elif len(stripped) == 0:
+                sents.append(sent)
+                pos_tokens.append(token)
+                sent = []
+                token = []
+            else:
+                sent.append(stripped[1].lower())
+                token.append(stripped[4])
+
+    return sents, pos_tokens
+
+
+def flatten(list_of_lists):
+    for list in list_of_lists:
+        for item in list:
+            yield item
+
+def subword_tokenize(tokens, tokenizer):
+    subwords = list(map(tokenizer.tokenize, tokens))
+    subword_lengths = list(map(len, subwords))
+    subwords = ["[CLS]"] + list(flatten(subwords)) + ["[SEP]"]
+    token_start_idxs = 1 + np.cumsum([0] + subword_lengths[:-1])
+    return subwords, token_start_idxs
+
+# might not need this if I manually do this
+# need to potentially change embedding size/token size
+# integrating this: tokenizer.pad_token_id
+# fix the 250 so that it's not hardcoded
+
+def subword_tokenize_to_ids(tokens, tokenizer):
+    subwords, token_start_idxs = subword_tokenize(tokens, tokenizer)
+    subword_ids, mask = convert_tokens_to_ids(subwords, tokenizer)
+    token_starts = torch.zeros(1, 250).to(subword_ids)
+    token_starts[0, token_start_idxs] = 1
+    return subword_ids, mask, token_starts
+
+
+def convert_tokens_to_ids(tokens, tokenizer, pad=True):
+    token_ids = tokenizer.convert_tokens_to_ids(tokens)
+    ids = torch.tensor([token_ids])#.to(device=device)
+    if pad:
+        padded_ids = torch.zeros(1, 250).to(ids)
+        padded_ids[0, :ids.size(1)] = ids
+        mask = torch.zeros(1, 250).to(ids)
+        mask[0, :ids.size(1)] = 1
+        return padded_ids, mask
+    else:
+        return ids
+
+def pad_labels(labels, pad=True):
+    if pad:
+        padded_labels = torch.zeros(1, 250).to(labels)
+        padded_labels[0, :labels.size(1)] = labels
+        return padded_labels
+    return labels
+
+
 if __name__ == "__main__":
     # TODO:
     ## 1. Figure out the format of the data that needs to be fed in (take a look at the tokenization)
     ##    that was given (probably will have to pad sequence)
     ## 2. Figure out what exactly the output of the model means in this case
-    # tokenizer = AutoTokenizer.from_pretrained("t5-small")
+    tokenizer = AutoTokenizer.from_pretrained("t5-small")
     #model = AutoModelWithLMHead.from_pretrained("t5-small")
-    
-    print(pos())
+
+    # sentence format:
+    sentence = ["hello", "I", "am", "a", "cat", "tokenize", "discussion"]
+    subwords, token_start_idxs = subword_tokenize(sentence, tokenizer)
+    print(subwords, token_start_idxs)
+
+    print()
+
+    subword_ids, mask, token_starts = subword_tokenize_to_ids(sentence, tokenizer)
+    # print(subword_ids, mask, token_starts)
+    print(subword_ids)
+    print(mask)
+    print(token_starts)
+
+    sents, pos_tokens = pos()
+    # print(sents)
+    # print(pos_tokens)
+    # print(pos())
