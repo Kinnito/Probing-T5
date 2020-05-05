@@ -16,7 +16,7 @@ from tokenizers import (ByteLevelBPETokenizer,
 # appending a path every time because it won't stick
 nltk.data.path.append('/data/limill01/Probing-T5/nltk_data/')
 
-device = torch.device('cuda:0')
+device = torch.device('cuda')
 
 # get the dataset into the correct form and append "chunking:" to the front
 def chunking():
@@ -121,7 +121,7 @@ def flatten(list_of_lists):
 def subword_tokenize(tokens, tokenizer):
     subwords = list(map(tokenizer.tokenize, tokens))
     subword_lengths = list(map(len, subwords))
-    subwords = ["[CLS]"] + list(flatten(subwords)) + ["[SEP]"]
+    subwords = ["<s>"] + list(flatten(subwords)) + ["</s>"]
     token_start_idxs = 1 + np.cumsum([0] + subword_lengths[:-1])
     return subwords, token_start_idxs
 
@@ -130,41 +130,31 @@ def subword_tokenize(tokens, tokenizer):
 # integrating this: tokenizer.pad_token_id
 # fix the 250 so that it's not hardcoded
 
-def subword_tokenize_to_ids(tokens, tokenizer):
+def subword_tokenize_to_ids(tokens, tokenizer, emb_size):
     subwords, token_start_idxs = subword_tokenize(tokens, tokenizer)
-    subword_ids, mask = convert_tokens_to_ids(subwords, tokenizer)
-    token_starts = torch.zeros(1, 250).to(subword_ids)
+    subword_ids, mask = convert_tokens_to_ids(subwords, tokenizer, emb_size)
+    token_starts = torch.zeros(1, emb_size).to(subword_ids)
     token_starts[0, token_start_idxs] = 1
     return subword_ids, mask, token_starts
 
 
-def convert_tokens_to_ids(tokens, tokenizer, pad=True):
+def convert_tokens_to_ids(tokens, tokenizer, emb_size):
     token_ids = tokenizer.convert_tokens_to_ids(tokens)
-    ids = torch.tensor([token_ids])#.to(device=device)
-    if pad:
-        padded_ids = torch.zeros(1, 250).to(ids)
-        padded_ids[0, :ids.size(1)] = ids
-        mask = torch.zeros(1, 250).to(ids)
-        mask[0, :ids.size(1)] = 1
-        return padded_ids, mask
-    else:
-        return ids
+    ids = torch.tensor([token_ids]).to(device=device)
+    padded_ids = torch.zeros(1, emb_size).to(ids)
+    padded_ids[0, :ids.size(1)] = ids
+    mask = torch.zeros(1, emb_size).to(ids)
+    mask[0, :ids.size(1)] = 1
+    return padded_ids, mask
 
-def pad_labels(labels, pad=True):
-    if pad:
-        padded_labels = torch.zeros(1, 250).to(labels)
-        padded_labels[0, :labels.size(1)] = labels
-        return padded_labels
-    return labels
+def pad_labels(labels, emb_size):
+    padded_labels = torch.zeros(1, emb_size).to(labels)
+    padded_labels[0, :labels.size(1)] = labels
+    return padded_labels
 
 
 if __name__ == "__main__":
-    # TODO:
-    ## 1. Figure out the format of the data that needs to be fed in (take a look at the tokenization)
-    ##    that was given (probably will have to pad sequence)
-    ## 2. Figure out what exactly the output of the model means in this case
     tokenizer = AutoTokenizer.from_pretrained("t5-small")
-    #model = AutoModelWithLMHead.from_pretrained("t5-small")
 
     # sentence format:
     sentence = ["hello", "I", "am", "a", "cat", "tokenize", "discussion"]
