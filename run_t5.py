@@ -18,7 +18,7 @@ from transformers import (AdamW,
 
 parser = argparse.ArgumentParser(description='Parameters for training T5 on PoS')
 parser.add_argument('--batch', type=int, default=32, help='batch size for training')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs for training')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs for training')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate for training')
 parser.add_argument('--embsize', type=int, default=250, help='size of embeddings')
 parser.add_argument('--gradclip', type=int, default=0, help='gradient clipping for training')
@@ -142,35 +142,23 @@ def evaluate(model, testdata, mappings):
     print("here are the preds:", preds)
     print("here are the out_label_ids:", out_label_ids)
 
-
-
-
-# few design choices to change:
-#   use collate_fn
-#   pad using tokenizer.pad_token_id
-#   pad both the data and label at the same time
-#   question: do I use the tokenizer for both the data and labels?
-if __name__ == "__main__":
-    # word and position tokens
-    word_tokens, pos_tokens = tasks.pos()
-    tokenizer = AutoTokenizer.from_pretrained("t5-small")
-
-    # prepare the labels
-    #pos_tokens_id = [label for token in pos_tokens for label in token]
+def prepare_data(tokenizer, word_tokens, pos_tokens):
+    word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
+    
     pos_tokens_id = []
     for token in pos_tokens:
         for label in token:
             if label not in pos_tokens_id:
                 pos_tokens_id.append(label)
 
-    # added the special tokens to the dictionary
+    # add special tokens to the dictionary
     special_tokens_dic = {'cls_token': '<s>', 'sep_token': '</s>', 'additional_special_tokens': pos_tokens_id}
     tokenizer.add_special_tokens(special_tokens_dic)
 
     labels = [tokenizer.encode(sent_tok) for sent_tok in pos_tokens]
-
+    
     # labels are correct now
-    torch_labels = [torch.LongTensor(sent).view(1,-1) for sent in labels]
+    torch_labels = [torch.LongTensor(sent).view(1, -1) for sent in labels]
 
     padded_labels = []
     for i in torch_labels:
@@ -182,27 +170,43 @@ if __name__ == "__main__":
     token_starts = []
     for i in word_tokens:
         subword_id, mask, token_start = tasks.subword_tokenize_to_ids(i, tokenizer, args.embsize)
-        #print(subword_id)
-        #print(mask)
-        #print(token_start)
-        #print("shape of ids:", subword_id.shape)
-        #print("shape of ids after flatten:", torch.flatten(subword_id).shape)
         torch_ids.append(torch.flatten(subword_id))
         torch_masks.append(torch.flatten(mask))
         token_starts.append(torch.flatten(token_start))
 
+    return torch_ids, torch_masks, padded_labels
+
+
+# few design choices to change:
+#   use collate_fn
+#   pad using tokenizer.pad_token_id
+#   pad both the data and label at the same time
+#   question: do I use the tokenizer for both the data and labels?
+if __name__ == "__main__":
+    # word and position tokens
+    print("starting to train")
+    word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
+
+    tokenizer = AutoTokenizer.from_pretrained("t5-small")
+    # torch_ids_train, torch_masks_train, torch_labels_train = prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
+
     ### For training
     # got the data and everything, start training
-    #dataset = Dataset(torch_ids, torch_masks, padded_labels)
-    #model = AutoModelWithLMHead.from_pretrained("t5-small")
-    #model.to(device)
-    #train(model, dataset)
+    # dataset = Dataset(torch_ids_train, torch_masks_train, torch_labels_train)
+    # model = AutoModelWithLMHead.from_pretrained("t5-small")
+    # model.to(device)
+    # train(model, dataset)
 
+    print("now evaluating!")
+
+    word_tokens_test, pos_tokens_test = tasks.pos('UD_English-EWT/en_ewt-ud-test.conllu')
+    torch_ids_test, torch_masks_test, torch_labels_test = prepare_data(tokenizer, word_tokens_test, word_tokens_test)
+ 
     ### For evaluating
     # to change: use a different dataset for testing
-    dataset = Dataset(torch_ids, torch_masks, padded_labels)
-    model = torch.load("pos_model")
+    dataset = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
+    model = torch.load("pos_model", map_location='cpu')
     model.to(device)
-    evaluate(model, dataset, token_starts)
+    evaluate(model, dataset, torch_masks_test)
 
     print("done!")

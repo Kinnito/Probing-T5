@@ -89,8 +89,8 @@ def pos():
     return word_pos
     '''
 
-def pos():
-    filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
+def pos(filename):
+    # filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
     sents = []
     pos_tokens = []
 
