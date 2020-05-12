@@ -16,7 +16,7 @@ from tokenizers import (ByteLevelBPETokenizer,
 # appending a path every time because it won't stick
 nltk.data.path.append('/data/limill01/Probing-T5/nltk_data/')
 
-device = torch.device('cuda')
+device = torch.device('cuda:0')
 
 # get the dataset into the correct form and append "chunking:" to the front
 def chunking():
@@ -63,7 +63,7 @@ def ner():
     print(reader._get_iob_words(temp._grids(), columns=['chunk', 'ne']))
     '''
 
-    '''
+'''
 def pos():
     def convert(line):
         sent = line.split()
@@ -87,7 +87,7 @@ def pos():
                 sent.append((stripped[1].lower(), stripped[4]))
 
     return word_pos
-    '''
+'''
 
 def pos(filename):
     # filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
@@ -120,6 +120,8 @@ def flatten(list_of_lists):
 
 def subword_tokenize(tokens, tokenizer):
     subwords = list(map(tokenizer.tokenize, tokens))
+    subwords = [[s.replace('▁', '') for s in x] for x in subwords]
+    subwords = [[s for s in x if s != ''] for x in subwords]
     subword_lengths = list(map(len, subwords))
     subwords = ["<s>"] + list(flatten(subwords)) + ["</s>"]
     token_start_idxs = 1 + np.cumsum([0] + subword_lengths[:-1])
@@ -154,22 +156,26 @@ def pad_labels(labels, emb_size):
 
 
 if __name__ == "__main__":
-    tokenizer = AutoTokenizer.from_pretrained("t5-small")
+    tokenizer = AutoTokenizer.from_pretrained("t5-small", padding_side='left')
 
     # sentence format:
-    sentence = ["hello", "I", "am", "a", "cat", "tokenize", "discussion"]
+    #sentence = ['<s>','what', 'if', 'google', 'morphed', 'into', 'googleos', '?', '<s>']
+    sentence = ['hello', 'my', 'name', 'is', 'phil', 'because', 'asdfasfdsfsbs', 'fasting']
+    labels = ['WP', 'IN', 'NNP', 'VBD', 'IN', 'NNP', '.']
+
+    
     subwords, token_start_idxs = subword_tokenize(sentence, tokenizer)
     print(subwords, token_start_idxs)
 
     print()
 
-    subword_ids, mask, token_starts = subword_tokenize_to_ids(sentence, tokenizer)
+    subword_ids, mask, token_starts = subword_tokenize_to_ids(sentence, tokenizer, 250)
     # print(subword_ids, mask, token_starts)
-    print(subword_ids)
-    print(mask)
-    print(token_starts)
+    print(subword_ids) # only look in the ids where we have a 1 for starts
+    print(mask) # don't need this wen testing
+    print(token_starts) # only look in the starts where 
 
-    sents, pos_tokens = pos()
+    #sents, pos_tokens = pos()
     # print(sents)
     # print(pos_tokens)
     # print(pos())

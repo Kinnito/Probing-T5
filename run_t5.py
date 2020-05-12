@@ -4,6 +4,7 @@ import numpy as np
 
 import tasks
 import argparse
+import pdb
 
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler, TensorDataset
@@ -17,6 +18,7 @@ from transformers import (AdamW,
 )
 
 parser = argparse.ArgumentParser(description='Parameters for training T5 on PoS')
+parser.add_argument('--feature', default=True, help='choose training or evaluation')
 parser.add_argument('--batch', type=int, default=32, help='batch size for training')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs for training')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate for training')
@@ -26,7 +28,7 @@ parser.add_argument('--gradclip', type=int, default=0, help='gradient clipping f
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
-device = torch.device('cuda')
+device = torch.device('cuda:0')
 
 class Dataset(Dataset):
     def __init__(self, ids, masks, labels):
@@ -38,9 +40,15 @@ class Dataset(Dataset):
         return len(self.ids)
 
     def __getitem__(self, index):
+        #print("idx:", index)
+        #print(len(self.ids))
         id_ = self.ids[index]
         mask = self.masks[index]
         label = self.labels[index]
+        # print("id_: ", id_)
+        # print("mask: ", mask)
+        # print("label: ", label)
+        #pdb.set_trace()
 
         return id_, mask, label
 
@@ -79,6 +87,10 @@ def train(model, traindata):
             attention_mask = batch[1]
             labels = batch[2].squeeze()
 
+            # print("inputs size:", inputs.size())
+            # print("attention size:", attention_mask.size())
+            # print("labels size:", labels.size())
+
             outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
             loss = outputs[0]
 
@@ -98,7 +110,7 @@ def train(model, traindata):
     torch.save(model, "pos_model")
     print("finished!")
 
-def evaluate(model, testdata, mappings):
+def evaluate(model, testdata, mappings, tokenizer):
     test_dataloader = DataLoader(testdata, shuffle=False, batch_size=args.batch)
     logger.info("***** Running evaluation *****")
     logger.info("  Num examples = %d", len(test_dataloader))
@@ -109,39 +121,68 @@ def evaluate(model, testdata, mappings):
     preds = None
     out_label_ids = None
 
-    # model.train()
+    model.eval()
 
-    print("printing out device:", device)
-    model.to(device)
-    
+    #preds = []
+    #out_label_ids = []
+    correct = 0
+    incorrect = 0
+    total = 0
+
+    print("size of test_dataloader:", len(testdata))
+    print("size of mappings:", len(mappings))
+    print("vocabulary:", tokenizer.get_vocab())
+    vocab = tokenizer.get_vocab()
+   
+    idx = 0
     for batch in tqdm(test_dataloader, desc="Evaluating"):
         batch = tuple(t.to(device) for t in batch)
+        maps = mappings[idx:idx+args.batch]
+        idx += args.batch
 
         with torch.no_grad():
             inputs = batch[0]
             attention_mask = batch[1]
             labels = batch[2].squeeze()
 
-            #print("checking inputs:", inputs.is_cuda)
-            #print("checking attention_mask:", attention_mask.is_cuda)
-            #print("checking labels:", labels.is_cuda)
-            #print("checking model:", next(model.parameters()).is_cuda)
-
             outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
             tmp_eval_loss, logits = outputs[:2]
 
             eval_loss += tmp_eval_loss.item()
 
-        if preds is None:
-            preds = logits.detach().cpu().numpy()
-            out_label_ids = labels.detach().cpu().numpy()
-        else:
-            preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-            out_label_ids = np.append(out_label_ids, labels.detach().cpu().numpy(), axis=0)
+            for out, label, m, mask in zip(logits, labels, maps, attention_mask):
+                result = [torch.max(x.cpu(), 0)[1].item() for x in out]
+                result = np.array(result)
+                #print("shape of out:", out.shape)
+                #print("shape of label:", label.shape)
+                #print("result of result:", result)
+                vals = np.where(m.cpu().numpy() != 0)[0]
+                print("showing the mapping:", m)
+                print("showing the mask", mask)
+                
+                #print(vals)
+                #print("shape of vals:", vals.shape)
+                pos = result[vals]
+                lab = label[vals]
+               
+                #for p, l in zip(pos, lab):
+                #    print(f"predicted: {p}, actual: {l}")  
+                
+                #i = np.where(mask.cpu().numpy() != 0)[0]
+                #print("values of i:", i)
+                # I need to fix this label mapping
+                #print("mask values:", mask.cpu().numpy())
+                #lab = label[mask.cpu().numpy()]
+                #print("here are the wanted positions:", pos)
+                #print("mask values:", mask)
+                #print("here are all the labels:", label)
+                #print("here are the wanted labels:", lab)
 
-    print("here are the preds:", preds)
-    print("here are the out_label_ids:", out_label_ids)
-
+        # preds.append(logits.cpu())
+        # out_label_ids.append(labels.cpu())
+        #print("shape of logits:", logits.shape)
+        #print("shape of labels", labels.shape)
+       
 def prepare_data(tokenizer, word_tokens, pos_tokens):
     word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
     
@@ -174,7 +215,7 @@ def prepare_data(tokenizer, word_tokens, pos_tokens):
         torch_masks.append(torch.flatten(mask))
         token_starts.append(torch.flatten(token_start))
 
-    return torch_ids, torch_masks, padded_labels
+    return torch_ids, torch_masks, token_starts, padded_labels
 
 
 # few design choices to change:
@@ -184,29 +225,34 @@ def prepare_data(tokenizer, word_tokens, pos_tokens):
 #   question: do I use the tokenizer for both the data and labels?
 if __name__ == "__main__":
     # word and position tokens
-    print("starting to train")
-    word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
 
-    tokenizer = AutoTokenizer.from_pretrained("t5-small")
-    # torch_ids_train, torch_masks_train, torch_labels_train = prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
+    
+    if args.feature:
+        print("starting to train")
+        word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
 
-    ### For training
-    # got the data and everything, start training
-    # dataset = Dataset(torch_ids_train, torch_masks_train, torch_labels_train)
-    # model = AutoModelWithLMHead.from_pretrained("t5-small")
-    # model.to(device)
-    # train(model, dataset)
+        tokenizer = AutoTokenizer.from_pretrained("t5-small")
+        torch_ids_train, torch_masks_train, torch_token_starts, torch_labels_train = prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
 
-    print("now evaluating!")
+        ### For training
+        # got the data, start training
+        dataset = Dataset(torch_ids_train, torch_masks_train, torch_labels_train)
+        model = AutoModelWithLMHead.from_pretrained("t5-small")
+        model.to(device)
+        train(model, dataset)
 
-    word_tokens_test, pos_tokens_test = tasks.pos('UD_English-EWT/en_ewt-ud-test.conllu')
-    torch_ids_test, torch_masks_test, torch_labels_test = prepare_data(tokenizer, word_tokens_test, word_tokens_test)
- 
-    ### For evaluating
-    # to change: use a different dataset for testing
-    dataset = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
-    model = torch.load("pos_model", map_location='cpu')
-    model.to(device)
-    evaluate(model, dataset, torch_masks_test)
+        print("done!")
 
-    print("done!")
+    else:
+        print("starting to evaluate")
+        word_tokens_test, pos_tokens_test = tasks.pos('UD_English-EWT/en_ewt-ud-test.conllu')
+        torch_ids_test, torch_masks_test, torch_token_starts, torch_labels_test = prepare_data(tokenizer, word_tokens_test, pos_tokens_test)
+
+        ### For evaluating
+        # got the data, start evaluating
+        dataset = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
+        model = torch.load("pos_model", map_location='cpu')
+        model.to(device)
+        evaluate(model, dataset, torch_token_starts, tokenizer)
+
+        print("done!")
