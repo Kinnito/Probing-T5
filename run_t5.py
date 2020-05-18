@@ -6,9 +6,11 @@ import tasks
 import argparse
 import pdb
 
+from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler, TensorDataset
 from transformers import AutoModelWithLMHead
+from transformers import T5Tokenizer, T5ForConditionalGeneration
 from tqdm import tqdm, trange
 from transformers import (AdamW,
         AutoConfig,
@@ -18,17 +20,21 @@ from transformers import (AdamW,
 )
 
 parser = argparse.ArgumentParser(description='Parameters for training T5 on PoS')
-parser.add_argument('--feature', default=True, help='choose training or evaluation')
+parser.add_argument('--train', dest='mode', action='store_true', help='choose training')
+parser.add_argument('--eval', dest='mode', action='store_false', help='choose evaluation')
 parser.add_argument('--batch', type=int, default=32, help='batch size for training')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs for training')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate for training')
 parser.add_argument('--embsize', type=int, default=250, help='size of embeddings')
-parser.add_argument('--gradclip', type=int, default=0, help='gradient clipping for training')
+parser.add_argument('--gradclip', type=int, default=0.25, help='gradient clipping for training')
+
+parser.set_defaults(mode=True)
 
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
+writer = SummaryWriter('runs')
 
 class Dataset(Dataset):
     def __init__(self, ids, masks, labels):
@@ -107,6 +113,12 @@ def train(model, traindata):
             model.zero_grad()
             global_step += 1
 
+            if (step % 100 == 0):
+                writer.add_scalar('train loss', tr_loss / global_step, global_step)
+                print(f"Epoch: {epochs_trained}, Step: {step}, Loss: {tr_loss / global_step}")
+        epochs_trained += 1
+    
+    writer.close()
     torch.save(model, "pos_model")
     print("finished!")
 
@@ -117,17 +129,11 @@ def evaluate(model, testdata, mappings, tokenizer):
     logger.info("  Batch size = %d", args.batch)
 
     eval_loss = 0.0
-    nb_eval_steps = 0
+    nb_eval_step = 0
     preds = None
     out_label_ids = None
 
     model.eval()
-
-    #preds = []
-    #out_label_ids = []
-    correct = 0
-    incorrect = 0
-    total = 0
 
     print("size of test_dataloader:", len(testdata))
     print("size of mappings:", len(mappings))
@@ -157,14 +163,25 @@ def evaluate(model, testdata, mappings, tokenizer):
                 #print("shape of label:", label.shape)
                 #print("result of result:", result)
                 vals = np.where(m.cpu().numpy() != 0)[0]
-                print("showing the mapping:", m)
-                print("showing the mask", mask)
+                #print("showing the mapping:", m)
+                #print("showing the mask", mask)
                 
                 #print(vals)
                 #print("shape of vals:", vals.shape)
                 pos = result[vals]
                 lab = label[vals]
-               
+                
+                # yeet this works now
+                for p, l in zip(pos, lab):
+                    if p != l:
+                        print(f"predicted: {p}, actual: {l}")
+
+            nb_eval_step += 1
+
+            if (nb_eval_step % 5 == 0):
+                writer.add_scalar('test loss', eval_loss / nb_eval_step, nb_eval_step)
+                print(f"Step: {nb_eval_step}, Loss: {eval_loss / nb_eval_step}")
+
                 #for p, l in zip(pos, lab):
                 #    print(f"predicted: {p}, actual: {l}")  
                 
@@ -225,19 +242,21 @@ def prepare_data(tokenizer, word_tokens, pos_tokens):
 #   question: do I use the tokenizer for both the data and labels?
 if __name__ == "__main__":
     # word and position tokens
-
     
-    if args.feature:
+    if args.mode:
         print("starting to train")
         word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
 
-        tokenizer = AutoTokenizer.from_pretrained("t5-small")
+        #tokenizer = AutoTokenizer.from_pretrained("t5-small")
+        tokenizer = T5Tokenizer.from_pretrained("t5-small")
         torch_ids_train, torch_masks_train, torch_token_starts, torch_labels_train = prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
 
         ### For training
         # got the data, start training
         dataset = Dataset(torch_ids_train, torch_masks_train, torch_labels_train)
-        model = AutoModelWithLMHead.from_pretrained("t5-small")
+        # not sure what T5ForConditionalGeneration does vs. the other T5 models
+        model = T5ForConditionalGeneration.from_pretrained("t5-small")
+       #model = AutoModelWithLMHead.from_pretrained("t5-small")
         model.to(device)
         train(model, dataset)
 
@@ -245,6 +264,7 @@ if __name__ == "__main__":
 
     else:
         print("starting to evaluate")
+        tokenizer = T5Tokenizer.from_pretrained("t5-small")
         word_tokens_test, pos_tokens_test = tasks.pos('UD_English-EWT/en_ewt-ud-test.conllu')
         torch_ids_test, torch_masks_test, torch_token_starts, torch_labels_test = prepare_data(tokenizer, word_tokens_test, pos_tokens_test)
 

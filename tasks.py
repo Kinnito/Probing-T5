@@ -16,7 +16,7 @@ from tokenizers import (ByteLevelBPETokenizer,
 # appending a path every time because it won't stick
 nltk.data.path.append('/data/limill01/Probing-T5/nltk_data/')
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 
 # get the dataset into the correct form and append "chunking:" to the front
 def chunking():
@@ -120,8 +120,16 @@ def flatten(list_of_lists):
 
 def subword_tokenize(tokens, tokenizer):
     subwords = list(map(tokenizer.tokenize, tokens))
-    subwords = [[s.replace('▁', '') for s in x] for x in subwords]
-    subwords = [[s for s in x if s != ''] for x in subwords]
+    #subwords = [[s.replace('▁', '') for s in x] for x in subwords]
+    #subwords = [[s for s in x if s != ''] for x in subwords]
+    # deal with the weird tokenization issues
+    for i in subwords:
+        #print("not in here")
+        if i[0] == '▁':
+            #print("in here")
+            i.pop(0)
+            i[0] = '▁' + i[0]
+            #print(i[0])
     subword_lengths = list(map(len, subwords))
     subwords = ["<s>"] + list(flatten(subwords)) + ["</s>"]
     token_start_idxs = 1 + np.cumsum([0] + subword_lengths[:-1])
@@ -169,11 +177,11 @@ if __name__ == "__main__":
 
     print()
 
-    subword_ids, mask, token_starts = subword_tokenize_to_ids(sentence, tokenizer, 250)
+    #subword_ids, mask, token_starts = subword_tokenize_to_ids(sentence, tokenizer, 250)
     # print(subword_ids, mask, token_starts)
-    print(subword_ids) # only look in the ids where we have a 1 for starts
-    print(mask) # don't need this wen testing
-    print(token_starts) # only look in the starts where 
+    #print(subword_ids) # only look in the ids where we have a 1 for starts
+    #print(mask) # don't need this wen testing
+    #print(token_starts) # only look in the starts where 
 
     #sents, pos_tokens = pos()
     # print(sents)
