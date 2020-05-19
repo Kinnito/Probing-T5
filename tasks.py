@@ -1,22 +1,16 @@
 from __future__ import print_function
 import nltk
-import ipywidgets as widgets
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModelWithLMHead
 from nltk.corpus import conll2000
-from nltk.corpus import treebank
 from nltk.util import LazyConcatenation, LazyMap
 from nltk.corpus.reader import ConllCorpusReader
-from tokenizers import (ByteLevelBPETokenizer,
-                            CharBPETokenizer,
-                            SentencePieceBPETokenizer,
-                            BertWordPieceTokenizer)
 
 # appending a path every time because it won't stick
 nltk.data.path.append('/data/limill01/Probing-T5/nltk_data/')
 
-device = torch.device('cuda:1')
+device = torch.device('cuda')
 
 # get the dataset into the correct form and append "chunking:" to the front
 def chunking():
@@ -62,32 +56,6 @@ def ner():
     print(reader._get_iob_words(temp._grids(), columns=['ne']))
     print(reader._get_iob_words(temp._grids(), columns=['chunk', 'ne']))
     '''
-
-'''
-def pos():
-    def convert(line):
-        sent = line.split()
-        if not sent:
-            return []
-        else:
-            return (sent[1], sent[4])
-
-    filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
-    word_pos = []
-    with open(filename) as f:
-        sent = []
-        for line in f:
-            stripped = line.split()
-            if line.startswith('#'):
-                continue
-            elif len(stripped) == 0:
-                word_pos.append(sent)
-                sent = []
-            else:
-                sent.append((stripped[1].lower(), stripped[4]))
-
-    return word_pos
-'''
 
 def pos(filename):
     # filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
@@ -135,11 +103,6 @@ def subword_tokenize(tokens, tokenizer):
     token_start_idxs = 1 + np.cumsum([0] + subword_lengths[:-1])
     return subwords, token_start_idxs
 
-# might not need this if I manually do this
-# need to potentially change embedding size/token size
-# integrating this: tokenizer.pad_token_id
-# fix the 250 so that it's not hardcoded
-
 def subword_tokenize_to_ids(tokens, tokenizer, emb_size):
     subwords, token_start_idxs = subword_tokenize(tokens, tokenizer)
     subword_ids, mask = convert_tokens_to_ids(subwords, tokenizer, emb_size)
@@ -167,7 +130,6 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("t5-small", padding_side='left')
 
     # sentence format:
-    #sentence = ['<s>','what', 'if', 'google', 'morphed', 'into', 'googleos', '?', '<s>']
     sentence = ['hello', 'my', 'name', 'is', 'phil', 'because', 'asdfasfdsfsbs', 'fasting']
     labels = ['WP', 'IN', 'NNP', 'VBD', 'IN', 'NNP', '.']
 

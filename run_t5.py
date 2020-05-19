@@ -5,19 +5,13 @@ import numpy as np
 import tasks
 import argparse
 import pdb
+import csv
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler, TensorDataset
-from transformers import AutoModelWithLMHead
-from transformers import T5Tokenizer, T5ForConditionalGeneration
+from torch.utils.data import DataLoader, Datasett
+from transformers import T5Tokenizer, T5ForConditionalGeneration, AutoModelWithLMHead
 from tqdm import tqdm, trange
-from transformers import (AdamW,
-        AutoConfig,
-        AutoModelForTokenClassification,
-        AutoTokenizer,
-        get_linear_schedule_with_warmup,
-)
+from transformers import (AdamW, AutoTokenizer)
 
 parser = argparse.ArgumentParser(description='Parameters for training T5 on PoS')
 parser.add_argument('--train', dest='mode', action='store_true', help='choose training')
@@ -27,13 +21,15 @@ parser.add_argument('--epochs', type=int, default=10, help='number of epochs for
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate for training')
 parser.add_argument('--embsize', type=int, default=250, help='size of embeddings')
 parser.add_argument('--gradclip', type=int, default=0.25, help='gradient clipping for training')
+parser.add_argument('--log', dest='log', action='store_true', help='record data')
+parser.add_argument('--no-log', dest='log', action='store_false', help='do not record data')
 
 parser.set_defaults(mode=True)
 
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
-device = torch.device('cuda:1')
+device = torch.device('cuda')
 writer = SummaryWriter('runs')
 
 class Dataset(Dataset):
@@ -128,6 +124,8 @@ def evaluate(model, testdata, mappings, tokenizer):
     logger.info("  Num examples = %d", len(test_dataloader))
     logger.info("  Batch size = %d", args.batch)
 
+    total = 0
+    correct = 0
     eval_loss = 0.0
     nb_eval_step = 0
     preds = None
@@ -135,10 +133,12 @@ def evaluate(model, testdata, mappings, tokenizer):
 
     model.eval()
 
-    print("size of test_dataloader:", len(testdata))
-    print("size of mappings:", len(mappings))
-    print("vocabulary:", tokenizer.get_vocab())
-    vocab = tokenizer.get_vocab()
+    f = None
+    csvwriter = None
+    if args.log:
+        f = open('results.csv', 'w')
+        csvwriter = csv.writer(f)
+        csvwriter.writerow(['Loss', 'Accuracy'])
    
     idx = 0
     for batch in tqdm(test_dataloader, desc="Evaluating"):
@@ -156,50 +156,27 @@ def evaluate(model, testdata, mappings, tokenizer):
 
             eval_loss += tmp_eval_loss.item()
 
-            for out, label, m, mask in zip(logits, labels, maps, attention_mask):
-                result = [torch.max(x.cpu(), 0)[1].item() for x in out]
-                result = np.array(result)
-                #print("shape of out:", out.shape)
-                #print("shape of label:", label.shape)
-                #print("result of result:", result)
-                vals = np.where(m.cpu().numpy() != 0)[0]
-                #print("showing the mapping:", m)
-                #print("showing the mask", mask)
-                
-                #print(vals)
-                #print("shape of vals:", vals.shape)
-                pos = result[vals]
-                lab = label[vals]
-                
-                # yeet this works now
-                for p, l in zip(pos, lab):
-                    if p != l:
-                        print(f"predicted: {p}, actual: {l}")
+            ypred = torch.max(logits.cpu(), dim=2)[1]
+            ypred = [tokenizer.convert_ids_to_tokens(s) for s in ypred]
+            ytrue = [tokenizer.convert_ids_to_tokens(s) for s in labels]
+
+            ytrue = [item for sublist in ytrue for item in sublist]
+            ypred = [item for sublist in ypred for item in sublist]
+
+            correct += sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred))
+            total += len(ytrue)
 
             nb_eval_step += 1
 
             if (nb_eval_step % 5 == 0):
-                writer.add_scalar('test loss', eval_loss / nb_eval_step, nb_eval_step)
+                loss = eval_loss / nb_eval_step
+                accuracy = correct / total
+                writer.add_scalar('test loss', loss, nb_eval_step)
+                writer.add_scalar('accuracy', accuracy, nb_eval_step)
+                if args.log:
+                    csvwriter.writerow([loss, accuracy])
                 print(f"Step: {nb_eval_step}, Loss: {eval_loss / nb_eval_step}")
 
-                #for p, l in zip(pos, lab):
-                #    print(f"predicted: {p}, actual: {l}")  
-                
-                #i = np.where(mask.cpu().numpy() != 0)[0]
-                #print("values of i:", i)
-                # I need to fix this label mapping
-                #print("mask values:", mask.cpu().numpy())
-                #lab = label[mask.cpu().numpy()]
-                #print("here are the wanted positions:", pos)
-                #print("mask values:", mask)
-                #print("here are all the labels:", label)
-                #print("here are the wanted labels:", lab)
-
-        # preds.append(logits.cpu())
-        # out_label_ids.append(labels.cpu())
-        #print("shape of logits:", logits.shape)
-        #print("shape of labels", labels.shape)
-       
 def prepare_data(tokenizer, word_tokens, pos_tokens):
     word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
     
@@ -234,12 +211,6 @@ def prepare_data(tokenizer, word_tokens, pos_tokens):
 
     return torch_ids, torch_masks, token_starts, padded_labels
 
-
-# few design choices to change:
-#   use collate_fn
-#   pad using tokenizer.pad_token_id
-#   pad both the data and label at the same time
-#   question: do I use the tokenizer for both the data and labels?
 if __name__ == "__main__":
     # word and position tokens
     
@@ -256,7 +227,7 @@ if __name__ == "__main__":
         dataset = Dataset(torch_ids_train, torch_masks_train, torch_labels_train)
         # not sure what T5ForConditionalGeneration does vs. the other T5 models
         model = T5ForConditionalGeneration.from_pretrained("t5-small")
-       #model = AutoModelWithLMHead.from_pretrained("t5-small")
+        #model = AutoModelWithLMHead.from_pretrained("t5-small")
         model.to(device)
         train(model, dataset)
 
