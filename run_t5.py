@@ -8,7 +8,7 @@ import pdb
 import csv
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader, Datasett
+from torch.utils.data import DataLoader, Dataset
 from transformers import T5Tokenizer, T5ForConditionalGeneration, AutoModelWithLMHead
 from tqdm import tqdm, trange
 from transformers import (AdamW, AutoTokenizer)
@@ -30,7 +30,7 @@ args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
 device = torch.device('cuda')
-writer = SummaryWriter('runs')
+writer = SummaryWriter()
 
 class Dataset(Dataset):
     def __init__(self, ids, masks, labels):
@@ -54,14 +54,14 @@ class Dataset(Dataset):
 
         return id_, mask, label
 
-def train(model, traindata):
+def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
     # prepare optimizer and scheduler
     # start training + text
     print("starting the training")
     logger.info("***** Running training *****")
    
     # define the data here
-    train_dataloader = DataLoader(traindata, shuffle=False, batch_size=args.batch)
+    train_dataloader = DataLoader(train_dat, shuffle=False, batch_size=args.batch)
 
     num_trained_epochs = args.epochs
 
@@ -108,15 +108,78 @@ def train(model, traindata):
             # include a scheduler step here if necessary
             model.zero_grad()
             global_step += 1
-
-            if (step % 100 == 0):
+            
+            if (len(epoch_iterator) == step + 1):
                 writer.add_scalar('train loss', tr_loss / global_step, global_step)
-                print(f"Epoch: {epochs_trained}, Step: {step}, Loss: {tr_loss / global_step}")
+
+                # save the model, then run on the development set
+                torch.save(model, "pos_model_" + str(idx))
+                #print(f"Epoch: {epochs_trained}, Step: {step}, Loss: {tr_loss / global_step}")
+
+                # test on dev set
+                dev(model, dev_dat, dev_mappings, tokenizer, idx)
+
+                # load back the original model
+                # model = torch.load("pos_model_" + str(idx), map_location="cpu")
+                # model.to(device)
         epochs_trained += 1
     
     writer.close()
     torch.save(model, "pos_model")
     print("finished!")
+
+def dev(model, dev_data, mappings, tokenizer, iteration):
+    dev_dataloader = DataLoader(dev_data, shuffle=False, batch_size=args.batch)
+    logger.info("***** Running development *****")
+    
+    total = 0
+    correct = 0
+    dev_loss = 0.0
+    nb_dev_step = 0
+
+    model.eval()
+    f = None
+    csvwriter = None
+    if args.log:
+        f = open('dev_results', 'a')
+        csvwriter = csv.writer(f)
+
+    idx = 0
+    for batch in tqdm(dev_dataloader, desc='Checking model accuracy...'):
+        batch = tuple(t.to(device) for t in batch)
+        maps = mappings[idx:idx+args.batch]
+        idx += args.batch
+
+        with torch.no_grad():
+            inputs = batch[0]
+            attention_mask = batch[1]
+            labels = batch[2].squeeze()
+
+            outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
+            tmp_dev_loss, logits = outputs[:2]
+
+            dev_loss += tmp_dev_loss.item()
+
+            ypred = torch.max(logits.cpu(), dim=2)[1]
+            ypred = [tokenizer.convert_ids_to_tokens(s) for s in ypred]
+            ytrue = [tokenizer.convert_ids_to_tokens(s) for s in labels]
+
+            ytrue = [item for sublist in ytrue for item in sublist]
+            ypred = [item for sublist in ypred for item in sublist]
+
+            correct += sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred))
+            total += len(ytrue)
+            nb_dev_step += 1
+
+    accuracy = correct / total
+    loss = dev_loss / nb_dev_step
+    writer.add_scalar('dev loss', loss, iteration)
+    writer.add_scalar('accuracy', accuracy, iteration)
+    if args.log:
+        csvwriter.writerow([loss, accuracy, iteration])
+
+    #print(f"Accuracy: {correct / total}")   
+
 
 def evaluate(model, testdata, mappings, tokenizer):
     test_dataloader = DataLoader(testdata, shuffle=False, batch_size=args.batch)
@@ -128,8 +191,6 @@ def evaluate(model, testdata, mappings, tokenizer):
     correct = 0
     eval_loss = 0.0
     nb_eval_step = 0
-    preds = None
-    out_label_ids = None
 
     model.eval()
 
@@ -177,6 +238,9 @@ def evaluate(model, testdata, mappings, tokenizer):
                     csvwriter.writerow([loss, accuracy])
                 print(f"Step: {nb_eval_step}, Loss: {eval_loss / nb_eval_step}")
 
+    #print(f"Step: {nb_eval_step}, Loss: {eval_loss / nb_eval_step}")
+    print(f"Accuracy: {correct / total}")
+
 def prepare_data(tokenizer, word_tokens, pos_tokens):
     word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
     
@@ -223,13 +287,17 @@ if __name__ == "__main__":
         torch_ids_train, torch_masks_train, torch_token_starts, torch_labels_train = prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
 
         ### For training
-        # got the data, start training
-        dataset = Dataset(torch_ids_train, torch_masks_train, torch_labels_train)
+        # got the data, split into train and dev sets
+
+        split = int(0.75 * len(torch_ids_train))
+
+        dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
+        dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
         # not sure what T5ForConditionalGeneration does vs. the other T5 models
         model = T5ForConditionalGeneration.from_pretrained("t5-small")
         #model = AutoModelWithLMHead.from_pretrained("t5-small")
         model.to(device)
-        train(model, dataset)
+        train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
 
         print("done!")
 
@@ -242,7 +310,7 @@ if __name__ == "__main__":
         ### For evaluating
         # got the data, start evaluating
         dataset = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
-        model = torch.load("pos_model", map_location='cpu')
+        model = torch.load("pos_model_9", map_location='cpu')
         model.to(device)
         evaluate(model, dataset, torch_token_starts, tokenizer)
 
