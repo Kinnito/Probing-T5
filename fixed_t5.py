@@ -22,8 +22,8 @@ parser.add_argument('--embsize', type=int, default=250, help='size of embeddings
 parser.add_argument('--gradclip', type=int, default=0.25, help='gradient clipping for training')
 parser.add_argument('--log', dest='log', action='store_true', help='record data')
 parser.add_argument('--no-log', dest='log', action='store_false', help='do not record data')
-parser.add_argument('--control', dest='control', action='store_true', help='control tasks')
-parser.add_argument('--ncontrol', dest='control', action='store_false', help='probing tasks')
+parser.add_argument('--ctrl', dest='control', action='store_true', help='control tasks')
+parser.add_argument('--nctrl', dest='control', action='store_false', help='probing tasks')
 
 parser.set_defaults(mode=True)
 
@@ -222,7 +222,7 @@ if __name__ == "__main__":
         tokenizer = T5Tokenizer.from_pretrained("t5-small")
         
         if args.control:
-            word_tokens_train, pos_tokens_train = tasks.make_control(tokenizer, word_tokens, pos_tokens_train, args.embsize)
+            word_tokens_train, pos_tokens_train = tasks.make_control(tokenizer, word_tokens_train, pos_tokens_train, args.embsize)
 
         torch_ids_train, torch_masks_train, torch_token_starts, torch_labels_train = r.prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
 

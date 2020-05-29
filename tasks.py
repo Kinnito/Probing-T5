@@ -145,7 +145,7 @@ def make_control(tokenizer, sent_toks, lab_toks, embsize):
     map_word_lab = {}
     # takes in the tokenizer, sentence tokens, label tokens
     # gets the ids for the sentences
-    special_ids = tokenizer.additional_special_tokens_ids
+    special_ids = tokenizer.additional_special_tokens
     for sent in sent_toks:
         print("here's the sent:", sent)
         s = []
@@ -159,8 +159,9 @@ def make_control(tokenizer, sent_toks, lab_toks, embsize):
                 s.append(select)
             else:
                 s.append(map_word_lab[word])
-        s = torch.LongTensor(s).view(1,-1)
-        new_lab_toks.append(pad_labels(s, embsize))
+        #s = torch.LongTensor(s).view(1,-1)
+        #new_lab_toks.append(pad_labels(s, embsize))
+        new_lab_toks.append(s)
 
     return sent_toks, new_lab_toks
 
