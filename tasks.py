@@ -1,6 +1,7 @@
 from __future__ import print_function
 import nltk
 import numpy as np
+import random
 import torch
 from transformers import AutoTokenizer, AutoModelWithLMHead
 from nltk.corpus import conll2000
@@ -11,6 +12,8 @@ from nltk.corpus.reader import ConllCorpusReader
 nltk.data.path.append('/data/limill01/Probing-T5/nltk_data/')
 
 device = torch.device('cuda')
+
+pos_list = ["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR", "JJS", "LS", "MD", "NN", "NNS", "NNP", "NNPS", "PDT", "POS", "PRP", "PRP$", "RB", "RBR", "RBS", "RP", "TO", "UH", "VB", "VBD", "VBG", "VBN", "VBP", "VBZ", "WDT", "WP", "WP$", "WRB"]
 
 # get the dataset into the correct form and append "chunking:" to the front
 def chunking():
@@ -125,27 +128,73 @@ def pad_labels(labels, emb_size):
     padded_labels[0, :labels.size(1)] = labels
     return padded_labels
 
+def make_control(tokenizer, sent_toks, lab_toks, embsize):
+    print("in make_control")
+
+    # get the tokens needed
+    lab_tokens_id = []
+    for token in lab_toks:
+        for label in token:
+            if label not in lab_tokens_id:
+                lab_tokens_id.append(label)
+
+    special_tokens_dic = {'cls_token': '<s>', 'sep_token': '</s>', 'additional_special_tokens': lab_tokens_id}
+    tokenizer.add_special_tokens(special_tokens_dic)
+
+    new_lab_toks = []
+    map_word_lab = {}
+    # takes in the tokenizer, sentence tokens, label tokens
+    # gets the ids for the sentences
+    special_ids = tokenizer.additional_special_tokens_ids
+    for sent in sent_toks:
+        print("here's the sent:", sent)
+        s = []
+        for word in sent:
+            if word not in map_word_lab:
+                # select a random id
+                select = random.choice(special_ids)
+                print("selected token:", select)
+                # associate the word with the id
+                map_word_lab[word] = select
+                s.append(select)
+            else:
+                s.append(map_word_lab[word])
+        s = torch.LongTensor(s).view(1,-1)
+        new_lab_toks.append(pad_labels(s, embsize))
+
+    return sent_toks, new_lab_toks
+
+    # testing adding tokens
+    # special_tokens_dic = {'cls_token': '<s>', 'sep_token': '</s>', 'additional_special_tokens': pos_list}
+    # tokenizer.add_special_tokens(special_tokens_dic)
+    # spec = tokenizer.additional_special_tokens
+    # spec_ids = tokenizer.additional_special_tokens_ids
+    # print("here are the special tokens:", spec)
+    # print("here are the special token ids", spec_ids)
+
+    # pass all of the labels in to get corresponding indices
+
 
 if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("t5-small", padding_side='left')
 
     # sentence format:
-    sentence = ['hello', 'my', 'name', 'is', 'phil', 'because', 'asdfasfdsfsbs', 'fasting']
-    labels = ['WP', 'IN', 'NNP', 'VBD', 'IN', 'NNP', '.']
+    sentence = [['hello', 'my', 'name', 'is', 'phil', 'because', 'asdfasfdsfsbs', 'fasting']]
+    labels = [['WP', 'IN', 'NNP', 'VBD', 'IN', 'NNP', '.']]
 
     
-    subwords, token_start_idxs = subword_tokenize(sentence, tokenizer)
-    print(subwords, token_start_idxs)
+    #subwords, token_start_idxs = subword_tokenize(sentence, tokenizer)
+    #print(subwords, token_start_idxs)
 
-    print()
+    sents, labs = make_control(tokenizer, sentence, labels, 250)
 
-    #subword_ids, mask, token_starts = subword_tokenize_to_ids(sentence, tokenizer, 250)
-    # print(subword_ids, mask, token_starts)
-    #print(subword_ids) # only look in the ids where we have a 1 for starts
-    #print(mask) # don't need this wen testing
-    #print(token_starts) # only look in the starts where 
+    print("here are the sents:", sents)
+    print("here are the labs:", labs)
+    print("here's the specific vocab number for hello:", tokenizer.convert_tokens_to_ids('hello'))
+    #for i in labs:
+    print(labs[0])
+    print(tokenizer.convert_ids_to_tokens(labs[0][0].numpy()))
+    #print("here's the vocab:", tokenizer.get_vocab())
+    
 
-    #sents, pos_tokens = pos()
-    # print(sents)
-    # print(pos_tokens)
-    # print(pos())
+

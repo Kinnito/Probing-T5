@@ -118,7 +118,7 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
         epochs_trained += 1
     
     writer.close()
-    torch.save(model, "pos_model")
+    #torch.save(model, "pos_model")
     print("finished!")
 
 def dev(model, dev_data, mappings, tokenizer, iteration):
@@ -134,7 +134,7 @@ def dev(model, dev_data, mappings, tokenizer, iteration):
     f = None
     csvwriter = None
     if args.log:
-        f = open('dev_results.csv', 'a')
+        f = open('std_dev_results.csv', 'a')
         csvwriter = csv.writer(f)
 
     idx = 0
@@ -167,7 +167,7 @@ def dev(model, dev_data, mappings, tokenizer, iteration):
     accuracy = correct / total
     loss = dev_loss / nb_dev_step
     writer.add_scalar('dev loss', loss, iteration)
-    writer.add_scalar('accuracy', accuracy, iteration)
+    writer.add_scalar('dev accuracy', accuracy, iteration)
     if args.log:
         csvwriter.writerow([loss, accuracy, iteration])
 
@@ -190,7 +190,7 @@ def evaluate(model, test_data, mappings, tokenizer):
     f = None
     csvwriter = None
     if args.log:
-        f = open('std_results.csv', 'w')
+        f = open('std_test_results.csv', 'w')
         csvwriter = csv.writer(f)
         csvwriter.writerow(['Loss', 'Accuracy'])
    
@@ -235,7 +235,7 @@ def evaluate(model, test_data, mappings, tokenizer):
     print(f"Accuracy: {correct / total}")
 
 def prepare_data(tokenizer, word_tokens, pos_tokens):
-    word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
+    #word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
     
     pos_tokens_id = []
     for token in pos_tokens:
@@ -302,7 +302,7 @@ if __name__ == "__main__":
         ### For evaluating
         # got the data, start evaluating
         dataset = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
-        model = torch.load("pos_model_9", map_location='cpu')
+        model = torch.load("models_std/std_pos_model_9", map_location='cpu')
         model.to(device)
         evaluate(model, dataset, torch_token_starts, tokenizer)
 

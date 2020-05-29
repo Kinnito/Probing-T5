@@ -22,6 +22,8 @@ parser.add_argument('--embsize', type=int, default=250, help='size of embeddings
 parser.add_argument('--gradclip', type=int, default=0.25, help='gradient clipping for training')
 parser.add_argument('--log', dest='log', action='store_true', help='record data')
 parser.add_argument('--no-log', dest='log', action='store_false', help='do not record data')
+parser.add_argument('--control', dest='control', action='store_true', help='control tasks')
+parser.add_argument('--ncontrol', dest='control', action='store_false', help='probing tasks')
 
 parser.set_defaults(mode=True)
 
@@ -71,8 +73,6 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
         if idx < len(params) - 1:
             param.requires_grad = False
 
-    exit()
-    
     optimizer = AdamW(params, lr=args.lr)
     train_iterator = trange(epochs_trained, int(num_trained_epochs), desc="Epoch")
 
@@ -109,7 +109,6 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
                 print(f'Loss: {tr_loss / global_step}')
         epochs_trained += 1
 
-    torch.save(model, "fixed_pos_model")
     print("finished!")
 
 def dev(model, dev_data, mappings, tokenizer, iteration):
@@ -157,7 +156,7 @@ def dev(model, dev_data, mappings, tokenizer, iteration):
     accuracy = correct / total
     loss = dev_loss / nb_dev_step
     writer.add_scalar('dev loss', loss, iteration)
-    writer.add_scalar('accuracy', accuracy, iteration)
+    writer.add_scalar('dev accuracy', accuracy, iteration)
     if args.log:
         csvwriter.writerow([loss, accuracy, iteration])
 
@@ -174,7 +173,7 @@ def evaluate(model, test_data, mappings, tokenizer):
     f = None
     csvwriter = None
     if args.log:
-        f = open('fixed_results.csv', 'w')
+        f = open('fixed_test_results.csv', 'w')
         csvwriter = csv.writer(f)
         csvwriter.writerow(['Loss', 'Accuracy'])
 
@@ -221,6 +220,10 @@ if __name__ == "__main__":
         # train
         word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
         tokenizer = T5Tokenizer.from_pretrained("t5-small")
+        
+        if args.control:
+            word_tokens_train, pos_tokens_train = tasks.make_control(tokenizer, word_tokens, pos_tokens_train, args.embsize)
+
         torch_ids_train, torch_masks_train, torch_token_starts, torch_labels_train = r.prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
 
         # data for training
@@ -237,6 +240,8 @@ if __name__ == "__main__":
         print("starting to evaluate")
         tokenizer = T5Tokenizer.from_pretrained("t5-small")
         word_tokens_test, pos_tokens_test = tasks.pos("UD_English-EWT/en_ewt-ud-test.conllu")
+        if args.control:
+            word_tokens_test, pos_tokens_test = tasks.make_control(tokenizer, word_tokens_test, pos_tokens_test, args.embsize)
         torch_ids_test, torch_masks_test, torch_token_starts, torch_labels_test = r.prepare_data(tokenizer, word_tokens_test, pos_tokens_test)
 
         # data for evluating
