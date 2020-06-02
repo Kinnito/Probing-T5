@@ -88,6 +88,24 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
             labels = batch[2].squeeze()
 
             outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
+
+            '''
+            # gonna test for garbage
+            garbage, logits = outputs[:2]
+            print(torch.max(logits, dim=1)[1])
+            print(labels)
+            ypred = torch.max(logits.cpu(), dim=2)[1]
+            ypred = [tokenizer.convert_ids_to_tokens(s) for s in ypred]
+            ytrue = [tokenizer.convert_ids_to_tokens(s) for s in labels]
+
+            ytrue = [item for sublist in ytrue for item in sublist]
+            ypred = [item for sublist in ypred for item in sublist]
+
+            print("correct:", sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred)))
+            print("total:", len(ytrue))
+            #exit()
+            # test is done
+            '''
             loss = outputs[0]
 
             loss.backward()
@@ -139,6 +157,8 @@ def dev(model, dev_data, mappings, tokenizer, iteration):
 
             outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
             tmp_dev_loss, logits = outputs[:2]
+            print(labels)
+            print(torch.max(logits, dim=2)[1])
 
             dev_loss += tmp_dev_loss.item()
 
@@ -151,7 +171,14 @@ def dev(model, dev_data, mappings, tokenizer, iteration):
 
             correct += sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred))
             total += len(ytrue)
+            print("correct:", sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred))) 
+            print("total:", len(ytrue))
             nb_dev_step += 1
+            exit()
+    #print("total correct:", correct)
+    #print("total total:", total)
+
+    #exit()
 
     accuracy = correct / total
     loss = dev_loss / nb_dev_step
@@ -220,7 +247,8 @@ if __name__ == "__main__":
         # train
         word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
         tokenizer = T5Tokenizer.from_pretrained("t5-small")
-        
+
+        ## i want to append pos: - do I include the pos token associated with it?
         if args.control:
             word_tokens_train, pos_tokens_train = tasks.make_control(tokenizer, word_tokens_train, pos_tokens_train, args.embsize)
 

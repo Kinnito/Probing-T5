@@ -239,12 +239,12 @@ def evaluate(model, test_data, mappings, tokenizer):
 def prepare_data(tokenizer, word_tokens, pos_tokens):
     #word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
    
-    print("here's the pos_tokens:", pos_tokens)
+    #print("here's the pos_tokens:", pos_tokens)
     pos_tokens_id = []
     for token in pos_tokens:
         for label in token:
             if label not in pos_tokens_id:
-                print("here's the label:", label)
+                #print("here's the label:", label)
                 pos_tokens_id.append(label)
 
     # add special tokens to the dictionary
@@ -279,9 +279,14 @@ if __name__ == "__main__":
         print("starting to train")
         word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
         tokenizer = T5Tokenizer.from_pretrained("t5-small")
+        print("before word_tokens_train:", word_tokens_train[0])
+        print("before pos_tokens_train:", pos_tokens_train[0])
 
         if args.control:
             word_tokens_train, pos_tokens_train = tasks.make_control(tokenizer, word_tokens_train, pos_tokens_train, args.embsize)
+            print("after word_tokens_train:", word_tokens_train[0])
+            print("after pos_tokens_train:", pos_tokens_train[0])
+            
 
         torch_ids_train, torch_masks_train, torch_token_starts, torch_labels_train = prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
 
@@ -305,7 +310,7 @@ if __name__ == "__main__":
         word_tokens_test, pos_tokens_test = tasks.pos('UD_English-EWT/en_ewt-ud-test.conllu')
 
         if args.control:
-            word_tokens_train, pos_tokens_train = tasks.make_control(tokenizer, word_tokens_train, pos_tokens_train, args.embsize)
+            word_tokens_test, pos_tokens_test = tasks.make_control(tokenizer, word_tokens_test, pos_tokens_test, args.embsize)
 
         torch_ids_test, torch_masks_test, torch_token_starts, torch_labels_test = prepare_data(tokenizer, word_tokens_test, pos_tokens_test)
 

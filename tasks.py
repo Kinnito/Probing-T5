@@ -147,13 +147,13 @@ def make_control(tokenizer, sent_toks, lab_toks, embsize):
     # gets the ids for the sentences
     special_ids = tokenizer.additional_special_tokens
     for sent in sent_toks:
-        print("here's the sent:", sent)
+        #print("here's the sent:", sent)
         s = []
         for word in sent:
             if word not in map_word_lab:
                 # select a random id
                 select = random.choice(special_ids)
-                print("selected token:", select)
+                #print("selected token:", select)
                 # associate the word with the id
                 map_word_lab[word] = select
                 s.append(select)
@@ -179,6 +179,7 @@ def make_control(tokenizer, sent_toks, lab_toks, embsize):
 if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("t5-small", padding_side='left')
 
+    '''
     # sentence format:
     sentence = [['hello', 'my', 'name', 'is', 'phil', 'because', 'asdfasfdsfsbs', 'fasting']]
     labels = [['WP', 'IN', 'NNP', 'VBD', 'IN', 'NNP', '.']]
@@ -196,6 +197,10 @@ if __name__ == "__main__":
     print(labs[0])
     print(tokenizer.convert_ids_to_tokens(labs[0][0].numpy()))
     #print("here's the vocab:", tokenizer.get_vocab())
+    '''
+    result = tokenizer.encode("pos: testing this stuff")
+    print(tokenizer.convert_ids_to_tokens(result))
+    print(result)
     
 
 
