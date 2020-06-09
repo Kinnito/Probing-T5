@@ -208,6 +208,8 @@ def evaluate(model, test_data, mappings, tokenizer):
             labels = batch[2].squeeze()
 
             outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
+            #decoder_ids = torch.LongTensor([[tokenizer.encode("<pad>", return_tensors="pt").to(device)] for i,idx in enumerate(inputs)])
+            #outputs = model(input_ids=inputs, decoder_input_ids=decoder_ids)
             tmp_eval_loss, logits = outputs[:2]
 
             eval_loss += tmp_eval_loss.item()

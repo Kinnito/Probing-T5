@@ -8,7 +8,7 @@ import run_t5 as r
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
-from transformers import T5Tokenizer, T5ForConditionalGeneration
+from transformers import T5Tokenizer, T5ForConditionalGeneration, T5Config
 from tqdm import tqdm, trange
 from transformers import AdamW, AutoTokenizer
 
@@ -64,14 +64,27 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
 
     model.zero_grad()
     params = [p for n,p in model.named_parameters()]
-
-    #for n,p in model.named_parameters():
-    #    print(n)
+    # just to have the layer names
+    names = [n for n,p in model.named_parameters()]
 
     # freeze everything but the last layer by setting grad to false
     for idx, param in enumerate(model.parameters()):
         if idx < len(params) - 1:
+            print(names[idx])
             param.requires_grad = False
+        else:
+            #print("last layer name:", names[idx])
+            #print("values of the last layer:", param)
+            param.data = torch.rand(param.size()).to(device)
+            #print("here are the new params:", param)
+    
+    '''
+    for idx, param in enumerate(model.parameters()):
+        if idx < len(params) - 1:
+            continue
+        else:
+            print("here's the param:", param)
+    '''
 
     optimizer = AdamW(params, lr=args.lr)
     train_iterator = trange(epochs_trained, int(num_trained_epochs), desc="Epoch")
@@ -157,8 +170,8 @@ def dev(model, dev_data, mappings, tokenizer, iteration):
 
             outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
             tmp_dev_loss, logits = outputs[:2]
-            print(labels)
-            print(torch.max(logits, dim=2)[1])
+            #print(labels)
+            #print(torch.max(logits, dim=2)[1])
 
             dev_loss += tmp_dev_loss.item()
 
@@ -171,10 +184,10 @@ def dev(model, dev_data, mappings, tokenizer, iteration):
 
             correct += sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred))
             total += len(ytrue)
-            print("correct:", sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred))) 
-            print("total:", len(ytrue))
+            #print("correct:", sum(y_t==y_p for y_t, y_p in zip(ytrue, ypred))) 
+            #print("total:", len(ytrue))
             nb_dev_step += 1
-            exit()
+            #exit()
     #print("total correct:", correct)
     #print("total total:", total)
 
@@ -258,7 +271,8 @@ if __name__ == "__main__":
         split = int(0.75 * len(torch_ids_train))
         dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
         dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
-        model = T5ForConditionalGeneration.from_pretrained("t5-small")
+        config = T5Config.from_pretrained("t5-small", output_hidden_states=True)
+        model = T5ForConditionalGeneration.from_pretrained("t5-small", config=config)
         model.to(device)
         train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
 
@@ -274,7 +288,7 @@ if __name__ == "__main__":
 
         # data for evluating
         dataset = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
-        model = torch.load("models_fixed/fixed_pos_model_9", map_location='cpu')
+        model = torch.load("models_fixed/fixed_pos_model_8", map_location='cpu')
         model.to(device)
         evaluate(model, dataset, torch_token_starts, tokenizer)
 
