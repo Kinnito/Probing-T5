@@ -296,13 +296,16 @@ if __name__ == "__main__":
         # got the data, split into train and dev sets
         split = int(0.75 * len(torch_ids_train))
 
-        dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
-        dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
+        # dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
+        # dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
+        dataset_train = Dataset(torch_ids_train[:100], torch_masks_train[:100], torch_labels_train[:100])
+        dataset_dev = Dataset(torch_ids_train[100:200], torch_masks_train[100:200], torch_labels_train[100:200])
         # not sure what T5ForConditionalGeneration does vs. the other T5 models
         model = T5ForConditionalGeneration.from_pretrained("t5-small")
         #model = AutoModelWithLMHead.from_pretrained("t5-small")
         model.to(device)
-        train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
+        #train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
+        train(model, dataset_train, dataset_dev, torch_token_starts[100:200], tokenizer)
 
         print("done!")
 

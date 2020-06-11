@@ -69,7 +69,8 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
 
     # freeze everything but the last layer by setting grad to false
     for idx, param in enumerate(model.parameters()):
-        if idx < len(params) - 1:
+        if idx != len(params) - 3:
+        #if idx < len(params) - 1:
             print(names[idx])
             param.requires_grad = False
         else:
@@ -269,12 +270,18 @@ if __name__ == "__main__":
 
         # data for training
         split = int(0.75 * len(torch_ids_train))
-        dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
-        dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
+        #dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
+        #dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
         config = T5Config.from_pretrained("t5-small", output_hidden_states=True)
         model = T5ForConditionalGeneration.from_pretrained("t5-small", config=config)
         model.to(device)
-        train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
+        #train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
+
+        # 100 values test
+        dataset_train = Dataset(torch_ids_train[:100], torch_masks_train[:100], torch_labels_train[:100])
+        dataset_dev = Dataset(torch_ids_train[100:200], torch_masks_train[100:200], torch_labels_train[100:200])
+
+        train(model, dataset_train, dataset_dev, torch_token_starts[100:200], tokenizer)
 
         print("done!")
 
@@ -288,7 +295,7 @@ if __name__ == "__main__":
 
         # data for evluating
         dataset = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
-        model = torch.load("models_fixed/fixed_pos_model_8", map_location='cpu')
+        model = torch.load("models_fixed/fixed_pos_model_9", map_location='cpu')
         model.to(device)
         evaluate(model, dataset, torch_token_starts, tokenizer)
 
