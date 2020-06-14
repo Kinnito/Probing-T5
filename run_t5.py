@@ -281,13 +281,13 @@ if __name__ == "__main__":
         print("starting to train")
         word_tokens_train, pos_tokens_train = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
         tokenizer = T5Tokenizer.from_pretrained("t5-small")
-        print("before word_tokens_train:", word_tokens_train[0])
-        print("before pos_tokens_train:", pos_tokens_train[0])
+        #print("before word_tokens_train:", word_tokens_train[0])
+        #print("before pos_tokens_train:", pos_tokens_train[0])
 
         if args.control:
             word_tokens_train, pos_tokens_train = tasks.make_control(tokenizer, word_tokens_train, pos_tokens_train, args.embsize)
-            print("after word_tokens_train:", word_tokens_train[0])
-            print("after pos_tokens_train:", pos_tokens_train[0])
+            #print("after word_tokens_train:", word_tokens_train[0])
+            #print("after pos_tokens_train:", pos_tokens_train[0])
             
 
         torch_ids_train, torch_masks_train, torch_token_starts, torch_labels_train = prepare_data(tokenizer, word_tokens_train, pos_tokens_train)
@@ -298,14 +298,14 @@ if __name__ == "__main__":
 
         # dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
         # dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
-        dataset_train = Dataset(torch_ids_train[:100], torch_masks_train[:100], torch_labels_train[:100])
-        dataset_dev = Dataset(torch_ids_train[100:200], torch_masks_train[100:200], torch_labels_train[100:200])
+        dataset_train = Dataset(torch_ids_train[:200], torch_masks_train[:200], torch_labels_train[:200])
+        dataset_dev = Dataset(torch_ids_train[200:400], torch_masks_train[200:400], torch_labels_train[200:400])
         # not sure what T5ForConditionalGeneration does vs. the other T5 models
         model = T5ForConditionalGeneration.from_pretrained("t5-small")
         #model = AutoModelWithLMHead.from_pretrained("t5-small")
         model.to(device)
         #train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
-        train(model, dataset_train, dataset_dev, torch_token_starts[100:200], tokenizer)
+        train(model, dataset_train, dataset_dev, torch_token_starts[200:400], tokenizer)
 
         print("done!")
 

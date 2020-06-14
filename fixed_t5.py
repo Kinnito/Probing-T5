@@ -69,8 +69,8 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
 
     # freeze everything but the last layer by setting grad to false
     for idx, param in enumerate(model.parameters()):
-        if idx != len(params) - 3:
-        #if idx < len(params) - 1:
+        #if idx != len(params) - 3:
+        if idx < len(params) - 1:
             print(names[idx])
             param.requires_grad = False
         else:
@@ -278,10 +278,10 @@ if __name__ == "__main__":
         #train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)
 
         # 100 values test
-        dataset_train = Dataset(torch_ids_train[:100], torch_masks_train[:100], torch_labels_train[:100])
-        dataset_dev = Dataset(torch_ids_train[100:200], torch_masks_train[100:200], torch_labels_train[100:200])
+        dataset_train = Dataset(torch_ids_train[:200], torch_masks_train[:200], torch_labels_train[:200])
+        dataset_dev = Dataset(torch_ids_train[200:400], torch_masks_train[200:400], torch_labels_train[200:400])
 
-        train(model, dataset_train, dataset_dev, torch_token_starts[100:200], tokenizer)
+        train(model, dataset_train, dataset_dev, torch_token_starts[200:400], tokenizer)
 
         print("done!")
 
