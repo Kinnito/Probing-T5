@@ -5,6 +5,7 @@ import tasks
 import argparse
 import csv
 import run_t5 as r
+import h5py
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Dataset
@@ -31,6 +32,17 @@ args = parser.parse_args()
 
 device = torch.device('cuda')
 writer = SummaryWriter()
+
+# seq2seq parameters
+INPUT_DIM = 512
+OUTPUT_DIM = 512
+ENC_EMB_DIM = 256
+DEC_EMB_DIM = 256
+HID_DIM = 10
+N_LAYERS = 2
+ENC_DROPOUT = 0.5
+DEC_DROPOUT = 0.5
+
 
 class Dataset(Dataset):
     def __init__(self, ids, masks, labels):
@@ -71,7 +83,7 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
     for idx, param in enumerate(model.parameters()):
         #if idx != len(params) - 3:
         if idx < len(params) - 1:
-            print(names[idx])
+            #print(names[idx])
             param.requires_grad = False
         else:
             #print("last layer name:", names[idx])
@@ -79,6 +91,7 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
             param.data = torch.rand(param.size()).to(device)
             #print("here are the new params:", param)
     
+    #h5 = h5py.File("fixed_dat_nctrl", "w")
     '''
     for idx, param in enumerate(model.parameters()):
         if idx < len(params) - 1:
@@ -102,6 +115,39 @@ def train(model, train_dat, dev_dat, dev_mappings, tokenizer):
             labels = batch[2].squeeze()
 
             outputs = model(input_ids=inputs, attention_mask=attention_mask, lm_labels=labels)
+            #print("here's the len", len(outputs))
+
+            '''
+            print(outputs[0].shape)
+            print(outputs[1].shape)
+            print((outputs[2][0][0]).shape)
+            print(outputs[3][0][0].shape)
+            print(outputs[4][0][0].shape)
+            print("checking shape:", outputs[5].shape)
+            print("checking the 3:", len(outputs[3]))
+            print("checking the 4:", len(outputs[4]))
+            print("checking the 5:", len(outputs[5]))
+            print("checking the 6:", len(outputs[6]))
+            print("checking the 7:", len(outputs[7]))
+            print("length of outputs:", len(outputs))
+            print("checking size of -2:", len(outputs[-2]))
+            print("checking shape with -2:", outputs[-2][0].shape)
+            print("checking size with -1:", len(outputs[-1]))
+            print("checking shape with -1:", outputs[-1][1].shape)
+            exit()
+            '''
+
+            ## assumption: i need outputs[-1][4] to get the decoder's 0th layer
+            #dset = h5.create_dataset(str(idx), data=outputs[-1][4].cpu())
+            with h5py.File("fixed_dat_nctrl", "a") as h5:
+                #dset = h5.create_dataset(str(idx), outputs[-1][4].shape)
+                #dset[:] = outputs[-1][4].cpu()
+                dset = h5.create_dataset(str(idx), data=outputs[-1][4].cpu())
+                print("here's the dataset:", dset)
+                print("here's the index:", idx)
+                print("extracting the data:", h5[str(idx)])
+            h5.close()
+            exit()
 
             '''
             # gonna test for garbage
@@ -272,7 +318,7 @@ if __name__ == "__main__":
         split = int(0.75 * len(torch_ids_train))
         #dataset_train = Dataset(torch_ids_train[:split], torch_masks_train[:split], torch_labels_train[:split])
         #dataset_dev = Dataset(torch_ids_train[split:], torch_masks_train[split:], torch_labels_train[split:])
-        config = T5Config.from_pretrained("t5-small", output_hidden_states=True)
+        config = T5Config.from_pretrained("t5-small", output_hidden_states=True, output_attentions=True)
         model = T5ForConditionalGeneration.from_pretrained("t5-small", config=config)
         model.to(device)
         #train(model, dataset_train, dataset_dev, torch_token_starts[split:], tokenizer)

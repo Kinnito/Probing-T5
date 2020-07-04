@@ -2,8 +2,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import h5py
+import argparse
 
 import random
+import numpy as np
+
+from tqdm import tqdm, trange
+from transformers import AdamW
+from torch.utils.data import DataLoader, Dataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -105,7 +111,67 @@ def init_weights(m):
     for name, param in m.named_parameters():
         nn.init.uniform_(param.data, -0.08, 0.08)
 
+def train(model, train, dev):
+    train_dataloader = DataLoader(train, shuffle=False, batch_size=args.batch)
+
+    num_trained_epochs = args.epochs
+
+    global_step = 0
+    epochs_trained = 0
+    tr_loss = 0.0
+
+    params = [p for n,p in model.named_parameters()]
+
+    model.zero_grad()
+    optimizer = AdamW(params, lr=args.lr)
+    train_iterator = trange(epochs_trained, int(num_trained_epochs), desc="Epoch")
+
+    for idx, _ in enumerate(train_iterator):
+        epoch_iterator = tqdm(train_dataloader, desc="Iteration")
+        for step, batch in enumerate(epoch_iterator):
+            model.train()
+            batch = tuple(t.to(device) for t in batch)
+            inputs = batch[0]
+            attention_mask = batch[1]
+            labels = batch[2]
+
+            print(intputs)
+            print(attention_mask)
+            print(labels)
+            print(inputs.shape)
+            print(attention_mask.shape)
+            print(labels.shape)
+            exit()
+
+# dataset to hold ids, masks, labels
+class Dataset(Dataset):
+    def __init__(self, ids, masks, labels):
+        self.ids = ids
+        self.masks = masks
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __getitem__(self, index):
+        id_ = self.ids[index]
+        mask = self.masks[index]
+        label = self.labels[index]
+
+        return id_, mask, label
+
+# gets the data from h5py form into numpy format
+def getData(h5):
+    raise NotImplementedException
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch', type=int, default=32)
+    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--lr', type=float, default=0.001)
+
+    args = parser.parse_args()
+
     # input = number of inputs possible
     # input_dim == len(src.vocab)
     # output = number of outputs possible
@@ -119,14 +185,40 @@ if __name__ == "__main__":
     ENC_DROPOUT = 0.5
     DEC_DROPOUT = 0.5
 
-    print("hello")
-    with h5py.File('fixed_dat_nctrl', 'r') as f:
-        print("checking dat")
-        print(f)
-        print(f['0'])
-
     enc = Encoder(INPUT_DIM, ENC_EMB_DIM, HID_DIM, N_LAYERS, ENC_DROPOUT)
     dec = Decoder(OUTPUT_DIM, DEC_EMB_DIM, HID_DIM, N_LAYERS, DEC_DROPOUT)
 
     model = Seq2Seq(enc, dec, device).to(device)
+
+    # need to convert these h5py into something kinda useful
+    # f_train = [hf[ref] for ref in n1[:]]
+
+    f_train = h5py.File('atten_train', 'r')
+    f_dev = h5py.File('atten_dev', 'r')
+    f_test = h5py.File('atten_test', 'r')
+
+    f_train_atten = h5py.File('atten_train_atten', 'r')
+    f_dev_atten = h5py.File('atten_dev_atten', 'r')
+    f_test_atten = h5py.File('atten_test_atten', 'r')
+
+    f_train_label = h5py.File('atten_train_label', 'r')
+    f_dev_label = h5py.File('atten_dev_label', 'r')
+    f_test_label = h5py.File('atten_test_label', 'r')
+
+    #train_data = np.fromfile('atten_train', dtype=float)
+    train_data = [f_train[key][:] for key in f_train.keys()]
+    print(train_data)
+    print(train_data.shape)
+    #dev_data = [f_dev[key][()] for key in f_dev.keys()]
+    #test_data = [f_dev[key][()] for key in f_test.keys()]
+
+
+
+    train_dataset = Dataset(f_train, f_train_atten, f_train_label)
+    dev_dataset = Dataset(f_dev, f_dev_atten, f_dev_label)
+    test_dataset = Dataset(f_test, f_test_atten, f_test_label)
+
+    train(model, train_dataset, dev_dataset)
+
+
     print(model)

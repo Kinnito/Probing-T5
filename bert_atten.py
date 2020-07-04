@@ -2,6 +2,7 @@ import tasks
 import torch
 import h5py
 import argparse
+import numpy as np
 
 from transformers import BertTokenizer, BertModel, BertConfig
 from torch.utils.data import DataLoader, Dataset
@@ -27,7 +28,7 @@ class Dataset(Dataset):
 
         return id_, mask, label
 
-def evaluate(f, data, model):
+def evaluate(f_dat, f_atten, f_lab, data, model):
     # load the data
     dataloader = DataLoader(data, shuffle=False, batch_size=args.batch)
 
@@ -39,10 +40,13 @@ def evaluate(f, data, model):
 
     model.eval()
     idx = 0
+    dat = None
+    atn = None
+    lab = None
     for batch in tqdm(dataloader, desc="Evaluating"):
         batch = tuple(t.to(device) for t in batch)
         #maps = mappings[idx:idx+args.batch] # 1 for now, change batch size if needed
-        idx += args.batch # same here
+        #idx += args.batch # same here
 
         with torch.no_grad():
             inputs = batch[0]
@@ -52,8 +56,23 @@ def evaluate(f, data, model):
             outputs = model(input_ids=inputs, attention_mask=attention_mask)
             # want the very last layer
             atten = outputs[-1][11]
-            dset = f.create_dataset(str(idx), data=outputs[-1][11].cpu())
-    f.close()
+            #dset = f_dat.create_dataset(str(idx), data=outputs[-1][11].cpu())
+            #dset = f_atten.create_dataset(str(idx), data=attention_mask.cpu())
+            #dset = f_lab.create_dataset(str(idx), data=labels.cpu())
+            #dat = np.stack((outputs[-1][11].cpu(), dat), axis=0)
+            #atn = np.concatenate((attention_mask.cpu(), atn), axis=0)
+            #lab = np.concatenate((labels.cpu(), lab), axis=0)
+            dat = np.stack([dat, outputs[-1][11].cpu()], axis=0)
+            atn = np.stack([atn, attention_mask.cpu()], axis=0)
+            lab = np.stack([lab, labels.cpu()], axis=0)
+            idx += args.batch
+    dset = f_dat.create_dataset(str(0), data=dat)
+    dset = f_atten.create_dataset(str(0), data=atn)
+    dset = f_lab.create_dataset(str(0), data=lab)
+    print("shape of data", lab.shape)
+    f_dat.close()
+    f_atten.close()
+    f_lab.close()
 
 
 def prepare_data(tokenizer, word_tokens, pos_tokens):
@@ -89,14 +108,22 @@ if __name__ == "__main__":
     # init argparse with following arg parse items
     parser = argparse.ArgumentParser()
     parser.add_argument('--embsize', type=int, default=400)
-    parser.add_argument('--batch', type=int, default=1)
+    parser.add_argument('--batch', type=int, default=32)
 
     args = parser.parse_args()
 
     # init the file to save stuff
-    f_train = h5py.File('atten_train', 'w')
-    f_dev = h5py.File('atten_dev', 'w')
-    f_test = h5py.File('atten_test', 'w')
+    f_train = h5py.File('rnn_atten_test/atten_train', 'w')
+    f_dev = h5py.File('rnn_atten_test/atten_dev', 'w')
+    f_test = h5py.File('rnn_atten_test/atten_test', 'w')
+
+    f_train_atten = h5py.File('rnn_atten_test/atten_train_atten', 'w')
+    f_dev_atten = h5py.File('rnn_atten_test/atten_dev_atten', 'w')
+    f_test_atten = h5py.File('rnn_atten_test/atten_test_atten', 'w')
+
+    f_train_label = h5py.File('rnn_atten_test/atten_train_label', 'w')
+    f_dev_label = h5py.File('rnn_atten_test/atten_dev_label', 'w')
+    f_test_label = h5py.File('rnn_atten_test/atten_test_label', 'w')
 
     print("starting up")
 
@@ -121,11 +148,6 @@ if __name__ == "__main__":
     dataset_test = Dataset(torch_ids_test, torch_masks_test, torch_labels_test)
     
     # start getting the outputs
-    evaluate(f_train, dataset_train, model)
-    evaluate(f_dev, dataset_dev, model)
-    evaluate(f_test, dataset_test, model)
-
-    # close the file and exit
-    f_train.close()
-    f_dev.close()
-    f_test.close()
+    evaluate(f_train, f_train_atten, f_train_label, dataset_train, model)
+    evaluate(f_dev, f_dev_atten, f_dev_label, dataset_dev, model)
+    evaluate(f_test, f_test_atten, f_test_label,  dataset_test, model)
