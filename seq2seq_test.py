@@ -11,10 +11,13 @@ import numpy as np
 from tqdm import tqdm, trange
 from transformers import AdamW
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
 
 # export CUDA_VISIBLE_DEVICES=N
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 #device = torch.device('cpu')
+
+writer = SummaryWriter()
 
 # encoder
 class Encoder(nn.Module):
@@ -128,7 +131,76 @@ def init_weights(m):
     for name, param in m.named_parameters():
         nn.init.uniform_(param.data, -0.08, 0.08)
 
-def train(model, train, dev):
+def train(model, train, label):
+    num_trained_epochs = args.epochs
+
+    global_step = 0
+    epochs_trained = 0
+    tr_loss = 0.0
+    
+    params = [p for n,p in model.named_parameters()]
+
+    model.zero_grad()
+    optimizer = AdamW(params, lr=args.lr)
+    criterion = nn.CrossEntropyLoss()
+
+    train_iterator = trange(epochs_trained, int(num_trained_epochs), desc="Epoch")
+
+    for idx, _ in enumerate(train_iterator):
+        # get the data now
+        train_keys = list(train.keys())
+        label_keys = list(label.keys())
+        for step in tqdm(range(len(list(train.keys())))):
+
+        #for step, (d_key, l_key) in enumerate(zip(train.keys(), label.keys())):
+                model.train()
+                inputs = torch.tensor(train[train_keys[step]][:]).to(device).squeeze()
+                labels = torch.tensor(label[label_keys[step]][:]).to(device).squeeze()
+
+                inputs = inputs.permute(1, 0, 2)
+                labels = labels.permute(1, 0)
+
+                #print("shape of inputs before put into model:", inputs.shape)
+                #print("shape of labels before put into model:", labels.shape)
+
+
+                output = model(inputs, labels)
+
+                output = output[1:].view(-1, output.shape[-1])
+                labels = labels[1:].reshape(-1)
+
+                #print("shape of output:", output.shape)
+                #print("shape of labels:", labels.shape)
+                loss = criterion(output, labels)
+
+                loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 0.25) # make it something else
+
+                optimizer.step()
+
+                tr_loss = loss.item()
+
+                print("loss:", (tr_loss / (idx + 1)))
+
+
+def evaluate(model, test, label):
+    eval_loss = 0.0
+    model.eval()
+    
+    for step, (d_key, l_key) in enumerate(zip(test.keys(), label.keys())):
+        with torch.no_grad():
+            output = model(d_key, l_key, 0)
+            output = output[1:].view(-1, output.shape[-1])
+            label = label[1:].view(-1)
+
+            loss = criterion(output, label)
+            eval_loss += loss.item()
+
+'''
+def train_temp(model, train, labels):
+    # train is h5py
+    train = Dataset(train, labels)
     train_dataloader = DataLoader(train, shuffle=False, batch_size=args.batch)
 
     num_trained_epochs = args.epochs
@@ -179,28 +251,7 @@ def train(model, train, dev):
             print(output[0])
 
             #print("here's the output:", output[0])
-
-
-def evaluate(model, test):
-    test_dataloader = DataLoader(test_data, shuffle=False, batch_size=args.batch)
-
-    total = 0
-    correct = 0
-    eval_loss = 0.0
-    nb_eval_step = 0
-
-    model.eval()
-
-    idx = 0
-    for batch in tqdm(test_datalodaer, desc="Evaluating"):
-        batch = [t.to(device) for t in batch]
-        idx += args.batch
-
-        with torch.no_grad():
-            inputs = batch[0].squeeze()
-            labels = batch[1].squeeze()
-
-            outputs = model(inputs, labels)
+'''
 
 # dataset to hold ids, masks, labels
 class Dataset(Dataset):
@@ -243,44 +294,30 @@ if __name__ == "__main__":
     f_dev_label = h5py.File('rnn_atten_test/atten_dev_label', 'r')
     f_test_label = h5py.File('rnn_atten_test/atten_test_label', 'r')
 
-    '''
-    train_data = []
-    train_label = []
-    dev_data = []
-    dev_label = []
-    for i in f_train.keys():
-        train_data.append(f_train[i][:])
-        break
-    for i in f_train_label.keys():
-        train_label.append(f_train_label[i][:])
-        break
-    for i in f_dev.keys():
-        dev_data.append(f_dev[i][:])
-        break
-    for i in f_dev_label.keys():
-        dev_label.append(f_dev_label[i][:])
-        break
-
+   
     '''
     train_data = None
     for idx, key in enumerate(f_train.keys()):
         if idx == 0:
-            train_data = f_train[key][:]
+            train_data = torch.FloatTensor(f_train[key][:])
+            print("shape inside if:", train_data.shape)
         else:
-            train_data = torch.stack([train_data, f_train[key][:]], dim=0) 
-        print("shape of trian data:", train_data.shape)
-    train_data = [f_train[key][:] for key in f_train.keys()]
-
+            train_data = torch.cat([train_data, torch.FloatTensor(f_train[key][:])], dim=0) 
+        print("shape of train data:", train_data.shape)
+    
+    for idx, key in enumerate(f_train_label.keys()):
+        if idx == 0:
+            train_label = torch.FloatTensor(f_train_label[key][:])
+            print("shape inside if:", train_label.shape)
+        else:
+            train_label = torch.cat([train_label, torch.FloatTensor(f_train_label[key][:])], dim=0)
+        print("shape of label data:", train_label.shape)
+    
+    train_data = [f_train[key][()] for key in f_train.keys()]
     result = np.array(train_data)
     print("checking shape at the end:", result.shape)
     exit()
-    #dev_data = [f_dev[key][()] for key in f_dev.keys()]
-    #test_data = [f_test[key][()] for key in f_test.keys()]
-
-    #train_label = [f_train_label[key][()] for key in f_train_label.keys()]
-    #dev_label = [f_dev_label[key][()] for key in f_dev_label.keys()]
-    #test_label = [f_test_label[key][()] for key in f_test_label.keys()]
-
+    '''
     # input = number of inputs possible
     # input_dim == len(src.vocab)
     # output = number of outputs possible
@@ -302,10 +339,12 @@ if __name__ == "__main__":
     model = Seq2Seq(enc, dec, device).to(device)
     model.apply(init_weights)
 
-    train_dataset = Dataset(train_data, train_label)
-    dev_dataset = Dataset(dev_data, dev_label)
+    # train_dataset = Dataset(train_data, train_label)
+    # dev_dataset = Dataset(dev_data, dev_label)
     #test_dataset = Dataset(test_data, test_label)
 
-    print("len of train dataset:", len(train_dataset))
-    train(model, train_dataset, dev_dataset)
+    # print("len of train dataset:", len(train_dataset))
+    # train(model, train_dataset, dev_dataset)
+    train(model, f_train, f_train_label)
+
 

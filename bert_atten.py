@@ -36,6 +36,8 @@ def train(f_dat, f_lab, data, model):
     model.eval()
     # get the data to use first
     idx = 0
+    shape_dat = None
+    shape_lab = None
     for batch in tqdm(dataloader, desc="Evaluating"):
         batch = tuple(t.to(device) for t in batch)
         idx += args.batch
@@ -45,9 +47,18 @@ def train(f_dat, f_lab, data, model):
             labels = batch[2].squeeze()
             outputs = model(input_ids=inputs, masked_lm_labels=labels)
 
+            if idx == args.batch:
+                shape_dat = outputs[2][12].shape
+                shape_lab = labels.shape
+
             # I want outputs[2][12]
-            dset = f_dat.create_dataset(str(idx), data=outputs[2][12].cpu())
-            dset = f_lab.create_dataset(str(idx), data=labels.cpu())
+
+            # size is wrong; skip
+            if outputs[2][12].shape != shape_dat or labels.shape != shape_lab:
+                continue
+
+            dset = f_dat.create_dataset(str(idx), shape_dat, data=outputs[2][12].cpu())
+            dset = f_lab.create_dataset(str(idx), shape_lab, data=labels.cpu())
 
     f_dat.close()
     f_lab.close()
