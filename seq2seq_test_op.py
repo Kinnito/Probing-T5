@@ -145,7 +145,6 @@ def train(model, train_dat, train_label, dev_dat, dev_label):
     global_step = 0
     epochs_trained = 0
     tr_loss = 0.0
-    dev(model, dev_dat, dev_label, 0)
     
     params = [p for n,p in model.named_parameters()]
 
