@@ -183,12 +183,12 @@ def train(model, train_dat, train_label, dev_dat, dev_label):
                 writer.add_scalar('train loss', tr_loss / global_step, global_step)
                 torch.save(model, "test_seq/model_" + str(idx))
                 
-                dev(model, dev, dev_label, idx)
+                dev(model, dev_dat, dev_label, idx)
         epochs_trained += 1
     writer.close()
 
-def dev(model, dev, label, iteration):
-    dev_data = POSDataset(dev, label)
+def dev(model, dev_dat, label, iteration):
+    dev_data = POSDataset(dev_dat, label)
     dev_sampler = RandomSampler(dev_data)
 
     dev_dataloader = DataLoader(dev_data, sampler=dev_sampler)
@@ -223,10 +223,7 @@ def dev(model, dev, label, iteration):
 
             nb_dev_step += 1
 
-            writer.add_scalar('dev loss', dev_loss / nb_dev_step, nb_dev_step)
-            writer.add_scalar('dev accuracy', correct / float(total), nb_dev_step)
-
-    accuracy = correct / total
+    accuracy = correct / float(total)
     loss = dev_loss / nb_dev_step
     writer.add_scalar('dev loss', loss, iteration)
     writer.add_scalar('dev accuracy', accuracy, iteration)

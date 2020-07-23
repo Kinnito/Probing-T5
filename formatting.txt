@@ -1,5 +1,4 @@
 Probing Task - Input - Output
-..
-Chunking - "a dog got into" - "B-NP I-NP B-VP B-PP""
-
-
+------------------------------
+Part of Speech - "a dog got into" - "DT NN VBD IN"
+Chunking - "a dog got into" - "B-NP I-NP B-VP B-PP"
