@@ -11,7 +11,7 @@ from tqdm import tqdm, trange
 
 ### class to run BERT and put the attention embeddings into a h5py file
 
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class Dataset(Dataset):
     def __init__(self, ids, masks, labels):
@@ -46,19 +46,24 @@ def train(f_dat, f_lab, data, model):
             inputs = batch[0]
             labels = batch[2].squeeze()
             outputs = model(input_ids=inputs, masked_lm_labels=labels)
+            out = outputs[2][12].cpu()
+            lab = labels.cpu()
 
             if idx == args.batch:
-                shape_dat = outputs[2][12].shape
-                shape_lab = labels.shape
+                shape_dat = out.shape
+                shape_lab = lab.shape
 
             # I want outputs[2][12]
 
             # size is wrong; skip
-            if outputs[2][12].shape != shape_dat or labels.shape != shape_lab:
+            if out.shape != shape_dat or lab.shape != shape_lab:
                 continue
+            #out = out.permute(1, 0, 2)
+            #lab = lab.permute(1, 0)
 
-            dset = f_dat.create_dataset(str(idx), shape_dat, data=outputs[2][12].cpu())
-            dset = f_lab.create_dataset(str(idx), shape_lab, data=labels.cpu())
+            dset = f_dat.create_dataset(str(idx), out.shape, data=out)
+            dset = f_lab.create_dataset(str(idx), lab.shape, data=lab)
+
 
     f_dat.close()
     f_lab.close()
@@ -103,13 +108,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # init the file stuff
-    f_train = h5py.File('rnn_atten_test/atten_train', 'w')
-    f_dev = h5py.File('rnn_atten_test/atten_dev', 'w')
-    f_test = h5py.File('rnn_atten_test/atten_test', 'w')
+    f_train = h5py.File('bert_embeddings/atten_train', 'w')
+    f_dev = h5py.File('bert_embeddings/atten_dev', 'w')
+    f_test = h5py.File('bert_embeddings/atten_test', 'w')
 
-    f_train_label = h5py.File('rnn_atten_test/atten_train_label', 'w')
-    f_dev_label = h5py.File('rnn_atten_test/atten_dev_label', 'w')
-    f_test_label = h5py.File('rnn_atten_test/atten_test_label', 'w')
+    f_train_label = h5py.File('bert_embeddings/atten_train_label', 'w')
+    f_dev_label = h5py.File('bert_embeddings/atten_dev_label', 'w')
+    f_test_label = h5py.File('bert_embeddings/atten_test_label', 'w')
     
     print("starting up")
 

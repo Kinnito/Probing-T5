@@ -40,7 +40,6 @@ def ner():
                 return self._get_iob_words(grid, tagset, column)
             return LazyConcatenation(LazyMap(get_iob_words, self._grids(fileids)))
 
-    
         def _get_iob_words(self, grid, tagset=None, columns="ne"):
             #print("pos here", self._colmap['pos'])
             #print("length of grid:", len(grid))
@@ -52,13 +51,9 @@ def ner():
 
  
     reader = nerConllReader(r'nltk_data/corpora/conll2003/', r'eng.train', ('words', 'pos', 'ne'))
-    print(reader.iob_words())
-
-    '''
-    print("here's the grids:", temp._grids())
-    print(reader._get_iob_words(temp._grids(), columns=['ne']))
-    print(reader._get_iob_words(temp._grids(), columns=['chunk', 'ne']))
-    '''
+    grid = reader._grids()
+    ner_sents = [[(word[0], word[3]) for word in sent] for sent in grid]
+    return grid
 
 def pos(filename):
     # filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
@@ -83,7 +78,7 @@ def pos(filename):
 
     return sents, pos_tokens
 
-
+# ------------------------------ helper functions
 def flatten(list_of_lists):
     for list in list_of_lists:
         for item in list:
@@ -198,9 +193,12 @@ if __name__ == "__main__":
     print(tokenizer.convert_ids_to_tokens(labs[0][0].numpy()))
     #print("here's the vocab:", tokenizer.get_vocab())
     '''
-    result = tokenizer.encode("pos: testing this stuff")
-    print(tokenizer.convert_ids_to_tokens(result))
-    print(result)
-    
+    #result = tokenizer.encode("pos: testing this stuff")
+    #print(tokenizer.convert_ids_to_tokens(result))
+    #print(result)
+
+    grid = ner()
+    ner_sents = [[(word[0],word[3]) for word in sent] for sent in grid]
+    print("ner_sents:", ner_sents)
 
 
