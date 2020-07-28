@@ -116,9 +116,8 @@ if __name__ == "__main__":
     f_train = f_dev = f_test = None
     f_train_label = f_dev_label = f_test_label = None
 
-    #torch_ids = torch_masks = torch_token_starts = torch_labels = None
-    #torch_ids_test = torch_masks_test = torch_token_starts_test = torch_labels_test = None
-
+    torch_ids = torch_masks = torch_token_starts = torch_labels = None
+    torch_ids_test = torch_masks_test = torch_token_starts_test = torch_labels_test = None
 
     # set up config and model and tokenizer
     config = BertConfig.from_pretrained("bert-base-cased", output_hidden_states=True)

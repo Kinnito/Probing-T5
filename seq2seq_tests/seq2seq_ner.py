@@ -10,6 +10,7 @@ import random
 import numpy as np
 
 from tqdm import tqdm, trange
+# from transformers import AdamW
 from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 
@@ -17,7 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 #device = torch.device('cpu')
 
-writer = SummaryWriter('../runs')
+writer = SummaryWriter()
 
 # encoder
 class Encoder(nn.Module):
@@ -194,7 +195,7 @@ def train(model, train_dat, train_label, dev_dat, dev_label):
             
             if len(epoch_iterator) == step + 1:
                 writer.add_scalar('train loss', tr_loss / global_step, global_step)
-                torch.save(model, "models/pos_model_" + str(idx))
+                torch.save(model, "models/ner_model_" + str(idx))
                 
                 dev(model, dev_dat, dev_label, idx)
         epochs_trained += 1
@@ -307,11 +308,11 @@ if __name__ == "__main__":
     if args.mode:
         print("Starting training")
 
-        f_train = h5py.File('bert_embeddings/atten_train_pos', 'r')
-        f_dev = h5py.File('bert_embeddings/atten_dev_pos', 'r')
+        f_train = h5py.File('bert_embeddings/atten_train_ner', 'r')
+        f_dev = h5py.File('bert_embeddings/atten_dev_ner', 'r')
 
-        f_train_label = h5py.File('bert_embeddings/atten_train_label_pos', 'r')
-        f_dev_label = h5py.File('bert_embeddings/atten_dev_label_pos', 'r')
+        f_train_label = h5py.File('bert_embeddingst/atten_train_label_ner', 'r')
+        f_dev_label = h5py.File('bert_embeddings/atten_dev_label_ner', 'r')
 
         train_data = [f_train[key][()] for key in f_train.keys()]
         train_label = [f_train_label[key][()] for key in f_train_label.keys()]
@@ -351,16 +352,18 @@ if __name__ == "__main__":
         model = Seq2Seq(enc, dec, device).to(device)
         model.apply(init_weights)
 
+        #train(model, f_train, f_train_label)
         train(model, train_data, train_label, dev_data, dev_label)
    
     else:
         print("Starting evaluation")
-        f_test = h5py.File('bert_embeddings/atten_test_pos', 'r')
-        f_test_label = h5py.File('bert_embeddings/atten_test_label_pos', 'r')
+        f_test = h5py.File('bert_embeddings/atten_test_ner', 'r')
+        f_test_label = h5py.File('bert_embeddings/atten_test_label_ner', 'r')
 
         test_data = [f_test[key][()] for key in f_test.keys()]
         test_label = [f_test_label[key][()] for key in f_test_label.keys()]
-        
-        model = torch.load('models/pos_model_0', map_location='cpu')
+
+        model = torch.load('models/ner_model_0', map_location='cpu')
         model.to(device)
+        #evaluate(model, f_test, f_test_label)
         evaluate(model, test_data, test_label)
