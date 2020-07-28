@@ -26,7 +26,7 @@ def chunking():
     # now append chunking to the front of each group/string
     return train_data, train_label
 
-def ner():  
+def ner(filename):  
     class nerConllReader(ConllCorpusReader):
         def iob_words(self, fileids=None, tagset=None, column="ne"):
             """
@@ -49,11 +49,25 @@ def ner():
             return list(zip(self._get_column(grid, self._colmap['words']), pos_tags,
                 self._get_column(grid, self._colmap[columns])))
 
- 
-    reader = nerConllReader(r'nltk_data/corpora/conll2003/', r'eng.train', ('words', 'pos', 'ne'))
+    f = filename[filename.rindex('/') + 1:]
+    directory = filename[:filename.rindex('/') + 1]
+    
+    #reader = nerConllReader(r'nltk_data/corpora/conll2003/', r'eng.train', ('words', 'pos', 'ne'))
+    reader = nerConllReader(directory, f, ('words', 'pos', 'ne'))
     grid = reader._grids()
-    ner_sents = [[(word[0], word[3]) for word in sent] for sent in grid]
-    return grid
+ 
+    sentence = []
+    label = []
+    for sent in grid:
+        s = []
+        l = []
+        for word in sent:
+            s.append(word[0])
+            l.append(word[3])
+        if len(s) > 0:
+            sentence.append(s)
+            label.append(l)
+    return sentence, label
 
 def pos(filename):
     # filename = 'UD_English-EWT/en_ewt-ud-train.conllu'
@@ -197,8 +211,21 @@ if __name__ == "__main__":
     #print(tokenizer.convert_ids_to_tokens(result))
     #print(result)
 
-    grid = ner()
+    grid = ner('nltk_data/corpora/conll2003/eng.train')
     ner_sents = [[(word[0],word[3]) for word in sent] for sent in grid]
     print("ner_sents:", ner_sents)
+    sentence = []
+    label = []
+    for sent in grid:
+        s = []
+        l = []
+        for word in sent:
+            s.append(word[0])
+            l.append(word[3])
+        sentence.append(s)
+        label.append(l)
+    print("here's the sentences:", sentence)
+    print("here's the label:", label)
+
 
 

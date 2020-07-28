@@ -1,3 +1,7 @@
+import sys
+sys.path.insert(0, '/data2/limill01/Probing-T5')
+import tasks
+
 import tasks
 import torch
 import h5py
@@ -68,19 +72,18 @@ def train(f_dat, f_lab, data, model):
     f_dat.close()
     f_lab.close()
 
+def prepare_data(tokenizer, word_tokens, label_tokens):
+    label_tokens_id = []
 
-
-def prepare_data(tokenizer, word_tokens, pos_tokens):
-    pos_tokens_id = []
-    for token in pos_tokens:
+    for token in label_tokens:
         for label in token:
-            if label not in pos_tokens_id:
-                pos_tokens_id.append(label)
+            if label not in label_tokens_id:
+                label_tokens_id.append(label)
 
-    special_tokens_dic = {'cls_token': '[CLS]', 'sep_token': '[SEP]', 'additional_special_tokens': pos_tokens_id}
+    special_tokens_dic = {'cls_token': '[CLS]', 'sep_token': '[SEP]', 'additional_special_tokens': label_tokens_id}
     tokenizer.add_special_tokens(special_tokens_dic)
 
-    labels = [tokenizer.encode(sent_tok) for sent_tok in pos_tokens]
+    labels = [tokenizer.encode(sent_tok) for sent_tok in label_tokens]
 
     torch_labels = [torch.LongTensor(sent).view(1, -1) for sent in labels]
 
@@ -104,35 +107,61 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--embsize', type=int, default=400)
     parser.add_argument('--batch', type=int, default=32)
+    parser.add_argument('--pos', dest='task', action='store_true', help='choose pos task')
+    parser.add_argument('--ner', dest='task', action='store_false', help='choose ner task')
 
     args = parser.parse_args()
 
-    # init the file stuff
-    f_train = h5py.File('bert_embeddings/atten_train', 'w')
-    f_dev = h5py.File('bert_embeddings/atten_dev', 'w')
-    f_test = h5py.File('bert_embeddings/atten_test', 'w')
+    # set up files
+    f_train = f_dev = f_test = None
+    f_train_label = f_dev_label = f_test_label = None
 
-    f_train_label = h5py.File('bert_embeddings/atten_train_label', 'w')
-    f_dev_label = h5py.File('bert_embeddings/atten_dev_label', 'w')
-    f_test_label = h5py.File('bert_embeddings/atten_test_label', 'w')
-    
-    print("starting up")
+    #torch_ids = torch_masks = torch_token_starts = torch_labels = None
+    #torch_ids_test = torch_masks_test = torch_token_starts_test = torch_labels_test = None
+
 
     # set up config and model and tokenizer
     config = BertConfig.from_pretrained("bert-base-cased", output_hidden_states=True)
-    #model = BertModel.from_pretrained("bert-base-cased", output_attentions=True)
     model = BertForMaskedLM.from_pretrained("bert-base-cased", config=config)
-    #model = RobertaForMaskedLM.from_pretrained("roberta-base", output_attentions=True)
     model.to(device)
     tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
-    #tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
-    # set up the data
-    word_tokens, pos_tokens = tasks.pos('UD_English-EWT/en_ewt-ud-train.conllu')
-    torch_ids, torch_masks, torch_token_starts, torch_labels = prepare_data(tokenizer, word_tokens, pos_tokens)
+    if args.task:
+    # init the file stuff
+        f_train = h5py.File('bert_embeddings/atten_train_pos', 'w')
+        f_dev = h5py.File('bert_embeddings/atten_dev_pos', 'w')
+        f_test = h5py.File('bert_embeddings/atten_test_pos', 'w')
 
-    word_tokens_test, pos_tokens_test = tasks.pos('UD_English-EWT/en_ewt-ud-test.conllu')
-    torch_ids_test, torch_masks_test, torch_token_starts_test, torch_labels_test = prepare_data(tokenizer, word_tokens_test, pos_tokens_test)
+        f_train_label = h5py.File('bert_embeddings/atten_train_label_pos', 'w')
+        f_dev_label = h5py.File('bert_embeddings/atten_dev_label_pos', 'w')
+        f_test_label = h5py.File('bert_embeddings/atten_test_label_pos', 'w')
+    
+        print("starting up")
+        
+        # set up the data
+        word_tokens, pos_tokens = tasks.pos('../UD_English-EWT/en_ewt-ud-train.conllu')
+        torch_ids, torch_masks, torch_token_starts, torch_labels = prepare_data(tokenizer, word_tokens, pos_tokens)
+
+        word_tokens_test, pos_tokens_test = tasks.pos('../UD_English-EWT/en_ewt-ud-test.conllu')
+        torch_ids_test, torch_masks_test, torch_token_starts_test, torch_labels_test = prepare_data(tokenizer, word_tokens_test, pos_tokens_test)
+
+    else:
+        f_train = h5py.File('bert_embeddings/atten_train_ner', 'w')
+        f_dev = h5py.File('bert_embeddings/atten_dev_ner', 'w')
+        f_test = h5py.File('bert_embeddings/atten_test_ner', 'w')
+
+        f_train_label = h5py.File('bert_embeddings/atten_train_label_ner', 'w')
+        f_dev_label = h5py.File('bert_embeddings/atten_dev_label_ner', 'w')
+        f_test_label = h5py.File('bert_embeddings/atten_test_label_ner', 'w')
+
+        print("starting up")
+
+        # set up the data
+        word_tokens, ner_tokens = tasks.ner('../nltk_data/corpora/conll2003/eng.train')
+        torch_ids, torch_masks, torch_token_starts, torch_labels = prepare_data(tokenizer, word_tokens, ner_tokens)
+
+        word_tokens_test, ner_tokens_test = tasks.ner('../nltk_data/corpora/conll2003/eng.testa')
+        torch_ids_test, torch_masks_test, torch_token_starts_test, torch_labels_test = prepare_data(tokenizer, word_tokens_test, ner_tokens_test)
 
     # split for train/dev/eval
     split = int(0.75 * len(torch_ids))
@@ -145,3 +174,6 @@ if __name__ == "__main__":
     train(f_train, f_train_label, dataset_train, model)
     train(f_dev, f_dev_label, dataset_dev, model)
     train(f_test, f_test_label, dataset_test, model)
+
+        
+
